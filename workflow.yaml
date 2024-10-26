@@ -1,0 +1,97 @@
+main:
+  params: [args]
+  steps:
+    # 初始化
+    - init:
+        assign:
+          - error_response:
+              error: "未提供有效輸入。請提供 'text' 或 'audio_path'"
+
+    # 驗證輸入
+    - validateInput:
+        switch:
+          - condition: ${args == null}
+            return: ${error_response}
+          - condition: ${"text" in args}
+            assign:
+              - text_for_gloss: ${args.text}
+            next: convertToGloss
+          - condition: ${"audio_path" in args}
+            next: processAudio
+          - condition: ${true}
+            return: ${error_response}
+
+    # 處理音頻
+    - processAudio:
+        try:
+          steps:
+            - processAudioToText:
+                call: http.post
+                args:
+                  url: 'https://asia-east1-genasl.cloudfunctions.net/process-audio'
+                  body:
+                    file_path: ${args.audio_path}
+                  auth:
+                    type: OIDC
+                result: audio_response
+
+            - convertToText:
+                call: http.post
+                args:
+                  url: 'https://asia-east1-genasl.cloudfunctions.net/speech-to-text'
+                  body:
+                    content: ${audio_response.body.content}
+                  auth:
+                    type: OIDC
+                result: stt_response
+
+            - prepareText:
+                assign:
+                  - text_for_gloss: ${json.decode(stt_response.body).text}
+                next: convertToGloss
+        except:
+          as: e
+          return:
+            error: "音頻處理失敗"
+            details: ${e}
+
+    # 文本轉 Gloss
+    - convertToGloss:
+        try:
+          call: http.post
+          args:
+            url: 'https://asia-east1-genasl.cloudfunctions.net/text-to-gloss'
+            body:
+              text: ${text_for_gloss}
+            auth:
+              type: OIDC
+          result: gloss_response
+        except:
+          as: e
+          return:
+            error: "Gloss 轉換失敗"
+            details: ${e}
+
+    # Gloss 轉影片
+    - getVideos:
+        try:
+          call: http.post
+          args:
+            url: 'https://asia-east1-genasl.cloudfunctions.net/gloss-to-video'
+            body:
+              gloss: ${json.decode(gloss_response.body).gloss}
+            auth:
+              type: OIDC
+          result: video_response
+        except:
+          as: e
+          return:
+            error: "影片查詢失敗"
+            details: ${e}
+
+    # 返回結果
+    - returnResult:
+        return:
+          gloss_response: ${gloss_response.body}
+          video_response: ${video_response.body}
+          original_text: ${text_for_gloss}
