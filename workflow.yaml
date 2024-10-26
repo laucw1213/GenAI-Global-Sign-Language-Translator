@@ -51,9 +51,11 @@ main:
                 next: convertToGloss
         except:
           as: e
-          return:
-            error: "音頻處理失敗"
-            details: ${e}
+          steps:
+            - handleAudioError:
+                return:
+                  error: "音頻處理失敗"
+                  details: ${json.encode(e)}
 
     # 文本轉 Gloss
     - convertToGloss:
@@ -68,9 +70,11 @@ main:
           result: gloss_response
         except:
           as: e
-          return:
-            error: "Gloss 轉換失敗"
-            details: ${e}
+          steps:
+            - handleGlossError:
+                return:
+                  error: "Gloss 轉換失敗"
+                  details: ${json.encode(e)}
 
     # Gloss 轉影片
     - getVideos:
@@ -85,9 +89,11 @@ main:
           result: video_response
         except:
           as: e
-          return:
-            error: "影片查詢失敗"
-            details: ${e}
+          steps:
+            - handleVideoError:
+                return:
+                  error: "影片查詢失敗"
+                  details: ${json.encode(e)}
 
     # 返回結果
     - returnResult:
