@@ -1,0 +1,15 @@
+[
+ {
+   "origin": ["*"],
+   "method": ["GET", "HEAD", "POST", "OPTIONS"],
+   "responseHeader": [
+     "Content-Type",
+     "Access-Control-Allow-Origin",
+     "Content-Length",
+     "Date",
+     "Server",
+     "x-goog-*"
+   ],
+   "maxAgeSeconds": 3600
+ }
+]
