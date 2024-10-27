@@ -4,7 +4,7 @@ import functions_framework
 from flask import jsonify, make_response
 import google.auth.transport.requests
 
-SERVICE_ACCOUNT = 'workflow-sa@genasl.iam.gserviceaccount.com'
+SERVICE_ACCOUNT = 'project-genasl@genasl.iam.gserviceaccount.com'
 SCOPES = ['https://www.googleapis.com/auth/cloud-platform']
 
 def cors_enabled_function(request):
