@@ -1,0 +1,4 @@
+functions-framework==3.*
+google-auth==2.*
+flask-cors==4.*
+google-cloud-workflows==1.14.5
