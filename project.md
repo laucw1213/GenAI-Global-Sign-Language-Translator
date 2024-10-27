@@ -24,7 +24,7 @@
    * **存儲大量影片於 Cloud Storage**：這些影片代表手語的具體動作。Cloud Storage 能夠高效存儲和管理這些大文件，提供可靠的媒體存儲解決方案。  
    * **Firestore 存儲 ASL gloss 與影片的對應關係**：在 Firestore 中存儲 ASL gloss 與對應影片的映射數據。每個 ASL gloss 都會作為一個文檔的字段，並包含對應的影片索引或影片 ID，這些索引用來定位存儲於 Cloud Storage 的具體影片。Firestore 具有強大的查詢能力和靈活的結構，支持多種查詢條件，這使得它能夠快速檢索並匹配用戶輸入的 ASL gloss，並找到對應的手語動作影片。這樣的結構設計有助於高效管理和檢索大量的手語數據。  
    * **使用 Cloud Function 進行查詢和配對**：當 ASL gloss 輸入後，Cloud Function 會自動查詢 Firestore，找出對應的影片索引，並從 Cloud Storage 中檢索相關影片。  
-4. **生成 ASL 動作動畫**(local)  
+4. **生成 ASL 動作動畫**  
    * 通過 API 調用本地/雲端部署的 stable diffusion,  animatediff 服務 ，並使用 comfyui 製作工作流  ,根據配對的動作數據分析生成dwpose 人體姿態動畫。stable diffusion 根據關鍵詞生成虛擬人, animatediff 通過接收人體姿態動畫,虛擬人 ，將其處理成符合虛擬人模型的照片, 並通過 KSampler把animediff 生成照片合併為流暢的動畫，以實現可視化手語動作。  
 5. **存儲至雲端**  
    * 將生成的 ASL 動作動畫上傳至 Google Cloud Storage，供未來使用和存取。這樣不僅方便影片的分發與共享，還提供高可用性和可擴展的存儲解決方案。
@@ -61,8 +61,9 @@
    * 生成 ASL gloss 後，Cloud Function 會自動查詢 Firestore，查找與這些 gloss 對應的影片索引。  
    * Firestore 中存有 ASL gloss 和影片之間的對應關係，可以快速定位到每個 gloss 對應的動作影片。  
    * Cloud Storage 中存儲著這些手語動作的影片文件，根據 Firestore 中的索引，Cloud Function 會檢索並獲取對應的影片文件。  
-   * 並會將檢測的圖片上傳到部署了ComfyUI 本地/雲端電腦,或者使用gemini更改workflow\_api.json 中VHS\_LoadVideoPath 的路徑指向影片文件路徑        
-5. **生成 ASL 動作動畫**  (local)
+   * 並會將檢測的圖片上傳到部署了ComfyUI 本地/雲端電腦,或者使用gemini更改workflow\_api.json 中VHS\_LoadVideoPath 的路徑指向影片文件路徑  
+       
+5. **生成 ASL 動作動畫**  
    * 通過網路連接本地/雲端部署的stable diffusion/animatediff , 並使用 api 啟動 ComfyUI prompt workflow，根據查詢到的影片數據通過 DWPose Estimator  
    *  生成 ASL 人體姿態動畫。  
    * stable diffusion 根據關鍵詞生成虛擬人  
