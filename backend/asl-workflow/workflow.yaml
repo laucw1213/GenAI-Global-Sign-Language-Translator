@@ -4,7 +4,7 @@ main:
     - init:
         assign:
           - error_response:
-              - error: "未提供有效輸入。請提供 'text' 或 'audio_path'"
+              - error: "未提供有效輸入。請提供文字內容"
               - timestamp: ${time.format(sys.now())}
           - execution_id: ${sys.get_env("WORKFLOW_EXECUTION_ID")}
           - timestamp: ${time.format(sys.now())}
@@ -19,58 +19,11 @@ main:
               - text_for_gloss:
                   - ${args.text}
             next: convertToGloss
-          - condition: ${"audio_path" in args}
-            next: processAudio
           - condition: ${true}
             next: returnError
 
     - returnError:
         return: ${error_response}
-
-    - processAudio:
-        try:
-          call: http.post
-          args:
-            url: ${base_url + "/process-audio"}
-            body:
-              audio_path: ${args.audio_path}
-            auth:
-              type: OIDC
-          result: audio_response
-        except:
-          as: e
-          steps:
-            - handleAudioException:
-                return:
-                  - error: "音頻處理失敗"
-                  - details: ${e}
-                  - stage: "audio_processing"
-                  - timestamp: ${timestamp}
-
-    - convertAudioToText:
-        try:
-          call: http.post
-          args:
-            url: ${base_url + "/speech-to-text"}
-            body:
-              content: ${audio_response.body.content}
-            auth:
-              type: OIDC
-          result: stt_response
-        except:
-          as: e
-          steps:
-            - handleSTTException:
-                return:
-                  - error: "語音轉文字失敗"
-                  - details: ${e}
-                  - stage: "speech_to_text"
-                  - timestamp: ${timestamp}
-
-    - processSTTResponse:
-        assign:
-          - text_for_gloss:
-              - ${stt_response.body.text}
 
     - convertToGloss:
         try:

@@ -7,39 +7,62 @@ import { HandRaisedIcon } from "@heroicons/react/24/outline";
 
 const WORKFLOW_URL = "https://workflowexecutions.googleapis.com/v1/projects/genasl/locations/asia-east1/workflows/asl-translation/executions";
 const AUTH_URL = "https://asia-east1-genasl.cloudfunctions.net/get-auth-token";
+const HUGGING_FACE_TOKEN = "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";
 
-const FileUploadButton = ({ disabled, onFileUpload }) => {
+const FileUploadButton = ({ disabled, onTranscriptionComplete }) => {
   const fileInputRef = React.useRef(null);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [processingStatus, setProcessingStatus] = useState("");
+
+  const queryWhisperAPI = async (audioBlob) => {
+    setProcessingStatus("Transcribing audio...");
+    try {
+      const formData = new FormData();
+      formData.append('audio', audioBlob, 'audio.wav');
+      
+      const response = await fetch(
+        "https://api-inference.huggingface.co/models/openai/whisper-base",
+        {
+          headers: { Authorization: `Bearer ${HUGGING_FACE_TOKEN}` },
+          method: "POST",
+          body: formData
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Transcription failed: ${response.status}`);
+      }
+
+      const result = await response.json();
+      return result.text;
+    } catch (error) {
+      console.error("Transcription error:", error);
+      throw error;
+    }
+  };
 
   const handleFileSelect = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
 
-    const formData = new FormData();
-    formData.append('file', file);
+    setUploadProgress(0);
+    setProcessingStatus("Processing audio file...");
 
     try {
-      setUploadProgress(0);
-      const response = await fetch('https://asia-east1-genasl.cloudfunctions.net/upload-audio', {
-        method: 'POST',
-        body: formData
-      });
-
-      if (!response.ok) {
-        throw new Error('Upload failed');
+      const transcribedText = await queryWhisperAPI(file);
+      
+      if (!transcribedText) {
+        throw new Error("No transcription result");
       }
 
-      const data = await response.json();
-      if (data.success) {
-        setUploadProgress(100);
-        onFileUpload(data.file_path);
-      } else {
-        throw new Error(data.error || 'Upload failed');
-      }
+      setProcessingStatus("Transcription successful!");
+      onTranscriptionComplete(transcribedText);
     } catch (error) {
-      console.error('Upload error:', error);
-      throw error;
+      console.error('Processing error:', error);
+      alert('Error processing audio file: ' + error.message);
+    } finally {
+      setProcessingStatus("");
+      setUploadProgress(0);
     }
   };
 
@@ -63,16 +86,23 @@ const FileUploadButton = ({ disabled, onFileUpload }) => {
         </svg>
         Upload Audio File
       </button>
-      {uploadProgress > 0 && uploadProgress < 100 && (
-        <div className="mt-2">
-          <div className="bg-gray-200 rounded-full h-2.5">
-            <div 
-              className="bg-indigo-600 h-2.5 rounded-full"
-              style={{ width: `${uploadProgress}%` }}
-            ></div>
-          </div>
+
+      {(uploadProgress > 0 || processingStatus) && (
+        <div className="mt-2 space-y-2">
+          {uploadProgress > 0 && (
+            <div className="bg-gray-200 rounded-full h-2.5">
+              <div 
+                className="bg-indigo-600 h-2.5 rounded-full"
+                style={{ width: `${uploadProgress}%` }}
+              ></div>
+            </div>
+          )}
+          {processingStatus && (
+            <p className="text-sm text-gray-600 text-center">{processingStatus}</p>
+          )}
         </div>
       )}
+
       <p className="mt-2 text-sm text-gray-500 text-center">
         Supports WAV, MP3, M4A formats
       </p>
@@ -91,46 +121,44 @@ function App() {
     try {
       const response = await fetch(AUTH_URL, {
         method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-        },
+        headers: { 'Accept': 'application/json' },
         mode: 'cors'
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw new Error(`Authentication failed: ${response.status}`);
       }
 
       const data = await response.json();
       
       if (data.token) {
-        console.log('Token refreshed successfully');
         setToken(data.token);
         setLastTokenRefresh(Date.now());
         setError(null);
       } else {
-        throw new Error(data.message || 'Unable to get authentication token');
+        throw new Error('No token received');
       }
     } catch (err) {
       console.error("Authentication error:", err);
-      setError("Authentication failed: " + (err.message || 'Unknown error'));
+      setError("Authentication failed: " + err.message);
       setToken(null);
     }
   };
 
   useEffect(() => {
     refreshToken();
-    
-    const tokenRefreshInterval = setInterval(() => {
-      refreshToken();
-    }, 50 * 60 * 1000);
-
+    const tokenRefreshInterval = setInterval(refreshToken, 50 * 60 * 1000);
     return () => clearInterval(tokenRefreshInterval);
   }, []);
 
   const processText = async (text) => {
     if (!token) {
-      setError("Authentication not completed, please try again later");
+      setError("Authentication required");
+      return;
+    }
+
+    if (!text.trim()) {
+      setError("Please enter some text");
       return;
     }
 
@@ -143,8 +171,6 @@ function App() {
         callLogLevel: "CALL_LOG_LEVEL_UNSPECIFIED"
       };
 
-      console.log("Sending request: ", requestBody);
-
       const response = await axios.post(WORKFLOW_URL, requestBody, {
         headers: {
           "Authorization": `Bearer ${token}`,
@@ -152,7 +178,7 @@ function App() {
         }
       });
 
-      if (response.data && response.data.name) {
+      if (response.data?.name) {
         const executionName = response.data.name;
         let executionResult = null;
         const maxAttempts = 100;
@@ -165,34 +191,29 @@ function App() {
           const statusResponse = await axios.get(
             `https://workflowexecutions.googleapis.com/v1/${executionName}`,
             {
-              headers: {
-                "Authorization": `Bearer ${token}`
-              }
+              headers: { "Authorization": `Bearer ${token}` }
             }
           );
-          
-          console.log(`Checking execution status ${attempts}/${maxAttempts}:`, statusResponse.data.state);
           
           if (statusResponse.data.state === "SUCCEEDED") {
             executionResult = statusResponse.data.result;
             break;
           } else if (statusResponse.data.state === "FAILED") {
-            throw new Error(`Workflow execution failed: ${statusResponse.data.error?.message || 'Unknown error'}`);
+            throw new Error(statusResponse.data.error?.message || 'Workflow failed');
           }
         }
 
         if (!executionResult) {
-          throw new Error('Workflow execution timed out');
+          throw new Error('Processing timeout');
         }
 
         setResult(JSON.parse(executionResult));
-        setError(null);
       } else {
-        throw new Error('Server returned incorrect format');
+        throw new Error('Invalid workflow response');
       }
     } catch (err) {
       console.error("Processing error:", err);
-      setError(err.message || 'Error processing request');
+      setError(err.message || 'Processing failed');
       setResult(null);
       
       if (err.response?.status === 401) {
@@ -200,91 +221,6 @@ function App() {
       }
     } finally {
       setLoading(false);
-    }
-  };
-
-  const processAudio = async (audioPath) => {
-    if (!token) {
-      setError("Authentication not completed, please try again later");
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setError(null);
-
-      const requestBody = {
-        argument: JSON.stringify({
-          audio_path: audioPath
-        }),
-        callLogLevel: "CALL_LOG_LEVEL_UNSPECIFIED"
-      };
-
-      console.log("Sending request: ", requestBody);
-
-      const response = await axios.post(WORKFLOW_URL, requestBody, {
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "Content-Type": "application/json"
-        }
-      });
-
-      if (response.data && response.data.name) {
-        const executionName = response.data.name;
-        let executionResult = null;
-        const maxAttempts = 100;
-        let attempts = 0;
-
-        while (!executionResult && attempts < maxAttempts) {
-          attempts++;
-          await new Promise(resolve => setTimeout(resolve, 2000));
-
-          const statusResponse = await axios.get(
-            `https://workflowexecutions.googleapis.com/v1/${executionName}`,
-            {
-              headers: {
-                "Authorization": `Bearer ${token}`
-              }
-            }
-          );
-          
-          console.log(`Checking execution status ${attempts}/${maxAttempts}:`, statusResponse.data.state);
-          
-          if (statusResponse.data.state === "SUCCEEDED") {
-            executionResult = statusResponse.data.result;
-            break;
-          } else if (statusResponse.data.state === "FAILED") {
-            throw new Error(`Workflow execution failed: ${statusResponse.data.error?.message || 'Unknown error'}`);
-          }
-        }
-
-        if (!executionResult) {
-          throw new Error('Workflow execution timed out');
-        }
-
-        setResult(JSON.parse(executionResult));
-        setError(null);
-      } else {
-        throw new Error('Server returned incorrect format');
-      }
-    } catch (err) {
-      console.error("Processing error:", err);
-      setError(err.message || 'Error processing request');
-      setResult(null);
-      
-      if (err.response?.status === 401) {
-        refreshToken();
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRecordingComplete = async (audioPath) => {
-    try {
-      await processAudio(audioPath);
-    } catch (err) {
-      setError(err.message || 'Error processing audio file');
     }
   };
 
@@ -305,7 +241,7 @@ function App() {
 
         {/* Main Content */}
         <div className="flex min-h-screen pt-24">
-          {/* 左側輸入區 */}
+          {/* Left Input Section */}
           <div className="w-1/2 p-8">
             <div className="bg-white rounded-2xl shadow-xl p-8">
               <div className="space-y-6">
@@ -318,7 +254,7 @@ function App() {
                     <span className="px-4 bg-white text-gray-500">or</span>
                   </div>
                 </div>
-                <AudioRecorder onRecordingComplete={handleRecordingComplete} disabled={loading || !token} />
+                <AudioRecorder onRecordingComplete={text => processText(text)} disabled={loading || !token} />
                 <div className="relative">
                   <div className="absolute inset-0 flex items-center">
                     <div className="w-full border-t border-gray-200"></div>
@@ -327,10 +263,13 @@ function App() {
                     <span className="px-4 bg-white text-gray-500">or</span>
                   </div>
                 </div>
-                <FileUploadButton disabled={loading || !token} onFileUpload={processAudio} />
+                <FileUploadButton 
+                  disabled={loading || !token} 
+                  onTranscriptionComplete={text => processText(text)} 
+                />
               </div>
 
-              {/* 錯誤訊息 */}
+              {/* Error Messages */}
               {error && (
                 <div className="mt-6 p-4 bg-red-50 rounded-lg">
                   <div className="flex">
@@ -346,7 +285,7 @@ function App() {
                 </div>
               )}
 
-              {/* 載入動畫 */}
+              {/* Loading Animation */}
               {loading && (
                 <div className="mt-6 flex justify-center">
                   <div className="relative">
@@ -361,7 +300,7 @@ function App() {
             </div>
           </div>
 
-          {/* 右側結果區 */}
+          {/* Right Result Section */}
           <div className="w-1/2 p-8">
             {result && (
               <div className="transform transition-all duration-500 ease-in-out">
