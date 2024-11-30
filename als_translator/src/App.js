@@ -27,7 +27,7 @@ const FileUploadButton = ({ disabled, onFileUpload }) => {
       });
 
       if (!response.ok) {
-        throw new Error('上傳失敗');
+        throw new Error('Upload failed');
       }
 
       const data = await response.json();
@@ -35,10 +35,10 @@ const FileUploadButton = ({ disabled, onFileUpload }) => {
         setUploadProgress(100);
         onFileUpload(data.file_path);
       } else {
-        throw new Error(data.error || '上傳失敗');
+        throw new Error(data.error || 'Upload failed');
       }
     } catch (error) {
-      console.error('上傳錯誤:', error);
+      console.error('Upload error:', error);
       throw error;
     }
   };
@@ -61,7 +61,7 @@ const FileUploadButton = ({ disabled, onFileUpload }) => {
         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
           <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
         </svg>
-        上傳音訊檔案
+        Upload Audio File
       </button>
       {uploadProgress > 0 && uploadProgress < 100 && (
         <div className="mt-2">
@@ -74,7 +74,7 @@ const FileUploadButton = ({ disabled, onFileUpload }) => {
         </div>
       )}
       <p className="mt-2 text-sm text-gray-500 text-center">
-        支援 WAV、MP3、M4A 等格式
+        Supports WAV, MP3, M4A formats
       </p>
     </div>
   );
@@ -109,11 +109,11 @@ function App() {
         setLastTokenRefresh(Date.now());
         setError(null);
       } else {
-        throw new Error(data.message || '無法獲取認證令牌');
+        throw new Error(data.message || 'Unable to get authentication token');
       }
     } catch (err) {
-      console.error("認證錯誤:", err);
-      setError("認證失敗: " + (err.message || '未知錯誤'));
+      console.error("Authentication error:", err);
+      setError("Authentication failed: " + (err.message || 'Unknown error'));
       setToken(null);
     }
   };
@@ -130,7 +130,7 @@ function App() {
 
   const processText = async (text) => {
     if (!token) {
-      setError("未完成認證，請稍後再試");
+      setError("Authentication not completed, please try again later");
       return;
     }
 
@@ -143,7 +143,7 @@ function App() {
         callLogLevel: "CALL_LOG_LEVEL_UNSPECIFIED"
       };
 
-      console.log("發送請求: ", requestBody);
+      console.log("Sending request: ", requestBody);
 
       const response = await axios.post(WORKFLOW_URL, requestBody, {
         headers: {
@@ -155,7 +155,7 @@ function App() {
       if (response.data && response.data.name) {
         const executionName = response.data.name;
         let executionResult = null;
-        const maxAttempts = 10;
+        const maxAttempts = 100;
         let attempts = 0;
 
         while (!executionResult && attempts < maxAttempts) {
@@ -171,28 +171,28 @@ function App() {
             }
           );
           
-          console.log(`檢查執行狀態 ${attempts}/${maxAttempts}:`, statusResponse.data.state);
+          console.log(`Checking execution status ${attempts}/${maxAttempts}:`, statusResponse.data.state);
           
           if (statusResponse.data.state === "SUCCEEDED") {
             executionResult = statusResponse.data.result;
             break;
           } else if (statusResponse.data.state === "FAILED") {
-            throw new Error(`工作流執行失敗: ${statusResponse.data.error?.message || '未知錯誤'}`);
+            throw new Error(`Workflow execution failed: ${statusResponse.data.error?.message || 'Unknown error'}`);
           }
         }
 
         if (!executionResult) {
-          throw new Error('工作流程執行超時');
+          throw new Error('Workflow execution timed out');
         }
 
         setResult(JSON.parse(executionResult));
         setError(null);
       } else {
-        throw new Error('伺服器返回格式不正確');
+        throw new Error('Server returned incorrect format');
       }
     } catch (err) {
-      console.error("處理錯誤:", err);
-      setError(err.message || '處理請求時發生錯誤');
+      console.error("Processing error:", err);
+      setError(err.message || 'Error processing request');
       setResult(null);
       
       if (err.response?.status === 401) {
@@ -205,7 +205,7 @@ function App() {
 
   const processAudio = async (audioPath) => {
     if (!token) {
-      setError("未完成認證，請稍後再試");
+      setError("Authentication not completed, please try again later");
       return;
     }
 
@@ -220,7 +220,7 @@ function App() {
         callLogLevel: "CALL_LOG_LEVEL_UNSPECIFIED"
       };
 
-      console.log("發送請求: ", requestBody);
+      console.log("Sending request: ", requestBody);
 
       const response = await axios.post(WORKFLOW_URL, requestBody, {
         headers: {
@@ -232,7 +232,7 @@ function App() {
       if (response.data && response.data.name) {
         const executionName = response.data.name;
         let executionResult = null;
-        const maxAttempts = 10;
+        const maxAttempts = 100;
         let attempts = 0;
 
         while (!executionResult && attempts < maxAttempts) {
@@ -248,28 +248,28 @@ function App() {
             }
           );
           
-          console.log(`檢查執行狀態 ${attempts}/${maxAttempts}:`, statusResponse.data.state);
+          console.log(`Checking execution status ${attempts}/${maxAttempts}:`, statusResponse.data.state);
           
           if (statusResponse.data.state === "SUCCEEDED") {
             executionResult = statusResponse.data.result;
             break;
           } else if (statusResponse.data.state === "FAILED") {
-            throw new Error(`工作流執行失敗: ${statusResponse.data.error?.message || '未知錯誤'}`);
+            throw new Error(`Workflow execution failed: ${statusResponse.data.error?.message || 'Unknown error'}`);
           }
         }
 
         if (!executionResult) {
-          throw new Error('工作流程執行超時');
+          throw new Error('Workflow execution timed out');
         }
 
         setResult(JSON.parse(executionResult));
         setError(null);
       } else {
-        throw new Error('伺服器返回格式不正確');
+        throw new Error('Server returned incorrect format');
       }
     } catch (err) {
-      console.error("處理錯誤:", err);
-      setError(err.message || '處理請求時發生錯誤');
+      console.error("Processing error:", err);
+      setError(err.message || 'Error processing request');
       setResult(null);
       
       if (err.response?.status === 401) {
@@ -284,7 +284,7 @@ function App() {
     try {
       await processAudio(audioPath);
     } catch (err) {
-      setError(err.message || '處理音檔時發生錯誤');
+      setError(err.message || 'Error processing audio file');
     }
   };
 
@@ -297,8 +297,8 @@ function App() {
             <HandRaisedIcon className="h-10 w-10 text-indigo-600" />
             <div>
               <h1 className="text-2xl font-bold text-gray-800">ASL Translator</h1>
-              <p className="text-sm text-gray-600">將文字或語音轉換成美國手語</p>
-              {token && <p className="text-xs text-green-600">已連接</p>}
+              <p className="text-sm text-gray-600">Convert text or speech to American Sign Language</p>
+              {token && <p className="text-xs text-green-600">Connected</p>}
             </div>
           </div>
         </div>
@@ -315,7 +315,7 @@ function App() {
                     <div className="w-full border-t border-gray-200"></div>
                   </div>
                   <div className="relative flex justify-center text-sm">
-                    <span className="px-4 bg-white text-gray-500">或</span>
+                    <span className="px-4 bg-white text-gray-500">or</span>
                   </div>
                 </div>
                 <AudioRecorder onRecordingComplete={handleRecordingComplete} disabled={loading || !token} />
@@ -324,7 +324,7 @@ function App() {
                     <div className="w-full border-t border-gray-200"></div>
                   </div>
                   <div className="relative flex justify-center text-sm">
-                    <span className="px-4 bg-white text-gray-500">或</span>
+                    <span className="px-4 bg-white text-gray-500">or</span>
                   </div>
                 </div>
                 <FileUploadButton disabled={loading || !token} onFileUpload={processAudio} />
@@ -354,7 +354,7 @@ function App() {
                       <div className="absolute top-0 left-0 w-full h-full rounded-full border-4 border-indigo-200 animate-pulse"></div>
                       <div className="absolute top-0 left-0 w-full h-full rounded-full border-4 border-indigo-600 border-t-transparent animate-spin"></div>
                     </div>
-                    <p className="mt-3 text-sm text-gray-500">翻譯中...</p>
+                    <p className="mt-3 text-sm text-gray-500">Translating...</p>
                   </div>
                 </div>
               )}

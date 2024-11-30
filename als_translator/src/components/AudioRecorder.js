@@ -5,25 +5,25 @@ export function AudioRecorder({ onRecordingComplete, disabled }) {
   const [isRecording, setIsRecording] = useState(false);
   const [mediaRecorder, setMediaRecorder] = useState(null);
 
-  // 检查麦克风权限
+  // Check microphone permission
   const checkMicrophonePermission = async () => {
     const permission = await navigator.permissions.query({ name: 'microphone' });
     if (permission.state !== 'granted') {
-      alert("请允许访问麦克风以进行录音");
+      alert("Please allow access to the microphone to record");
       return false;
     }
     return true;
   };
 
-  // 开始录音
+  // Start recording
   const startRecording = async () => {
     if (!(await checkMicrophonePermission())) return;
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { channelCount: 2 } // 设置为立体声通道
+        audio: { channelCount: 2 } // Set to stereo channel
       });
-      const audioContext = new AudioContext({ sampleRate: 44100 }); // 设置采样率为 44100 Hz
+      const audioContext = new AudioContext({ sampleRate: 44100 }); // Set sample rate to 44100 Hz
       const source = audioContext.createMediaStreamSource(stream);
       const processor = audioContext.createScriptProcessor(4096, 2, 2);
       const chunks = [];
@@ -33,7 +33,7 @@ export function AudioRecorder({ onRecordingComplete, disabled }) {
 
       processor.onaudioprocess = (e) => {
         const inputBuffer = e.inputBuffer.getChannelData(0);
-        const resampledBuffer = resampleAudio(inputBuffer, audioContext.sampleRate, 44100); // 重采样到44100 Hz
+        const resampledBuffer = resampleAudio(inputBuffer, audioContext.sampleRate, 44100); // Resample to 44100 Hz
         chunks.push(new Float32Array(resampledBuffer));
       };
 
@@ -57,17 +57,17 @@ export function AudioRecorder({ onRecordingComplete, disabled }) {
 
       setIsRecording(true);
 
-      // 设置录音时长为 4 秒
+      // Set recording duration to 4 seconds
       setTimeout(() => {
         stopRecording();
       }, 4000);
 
     } catch (err) {
-      console.error("无法访问麦克风:", err);
+      console.error("Unable to access microphone:", err);
     }
   };
 
-  // 停止录音
+  // Stop recording
   const stopRecording = () => {
     if (mediaRecorder && isRecording) {
       mediaRecorder.stop();
@@ -76,7 +76,7 @@ export function AudioRecorder({ onRecordingComplete, disabled }) {
     }
   };
 
-  // 重采样函数，将音频数据重采样到目标采样率
+  // Resample function to resample audio data to target sample rate
   function resampleAudio(buffer, originalSampleRate, targetSampleRate) {
     if (originalSampleRate === targetSampleRate) {
       return buffer;
@@ -95,7 +95,7 @@ export function AudioRecorder({ onRecordingComplete, disabled }) {
     return resampledBuffer;
   }
 
-  // 合并音频数据
+  // Merge audio data
   const mergeBuffers = (buffers, length) => {
     const result = new Float32Array(length);
     let offset = 0;
@@ -103,11 +103,11 @@ export function AudioRecorder({ onRecordingComplete, disabled }) {
       result.set(buffers[i], offset);
       offset += buffers[i].length;
     }
-    console.log("Merged data length:", result.length); // 检查合并后数据长度
+    console.log("Merged data length:", result.length); // Check merged data length
     return result;
   };
 
-  // 创建 WAV 文件
+  // Create WAV file
   const createWaveBlob = (samples, sampleRate) => {
     const buffer = new ArrayBuffer(44 + samples.length * 2);
     const view = new DataView(buffer);
@@ -118,28 +118,28 @@ export function AudioRecorder({ onRecordingComplete, disabled }) {
     writeString(view, 12, 'fmt ');
     view.setUint32(16, 16, true);
     view.setUint16(20, 1, true);
-    view.setUint16(22, 2, true); // 设置为立体声通道
+    view.setUint16(22, 2, true); // Set to stereo channel
     view.setUint32(24, sampleRate, true);
-    view.setUint32(28, sampleRate * 4, true); // 两个通道，每个样本2字节
-    view.setUint16(32, 4, true); // 每帧字节数
-    view.setUint16(34, 16, true); // 位深度
+    view.setUint32(28, sampleRate * 4, true); // Two channels, each sample 2 bytes
+    view.setUint16(32, 4, true); // Bytes per frame
+    view.setUint16(34, 16, true); // Bit depth
     writeString(view, 36, 'data');
     view.setUint32(40, samples.length * 2, true);
 
     floatTo16BitPCM(view, 44, samples);
 
-    console.log("WAV Blob created with size:", buffer.byteLength); // 检查WAV文件大小
+    console.log("WAV Blob created with size:", buffer.byteLength); // Check WAV file size
     return new Blob([buffer], { type: 'audio/wav' });
   };
 
-  // 写入字符串到 DataView
+  // Write string to DataView
   const writeString = (view, offset, string) => {
     for (let i = 0; i < string.length; i++) {
       view.setUint8(offset + i, string.charCodeAt(i));
     }
   };
 
-  // 将浮点数数据转换为 16-bit PCM
+  // Convert float data to 16-bit PCM
   const floatTo16BitPCM = (output, offset, input) => {
     for (let i = 0; i < input.length; i++, offset += 2) {
       const s = Math.max(-1, Math.min(1, input[i]));
@@ -147,7 +147,7 @@ export function AudioRecorder({ onRecordingComplete, disabled }) {
     }
   };
 
-  // 上传 WAV 文件
+  // Upload WAV file
   const uploadAudio = (wavBlob) => {
     const formData = new FormData();
     formData.append('file', wavBlob, 'recording.wav');
@@ -162,11 +162,11 @@ export function AudioRecorder({ onRecordingComplete, disabled }) {
       if (result.success) {
         onRecordingComplete(result.file_path);
       } else {
-        throw new Error(result.error || '上传失败');
+        throw new Error(result.error || 'Upload failed');
       }
     })
     .catch(error => {
-      console.error('录音处理错误:', error);
+      console.error('Recording processing error:', error);
     });
   };
 
@@ -190,12 +190,12 @@ export function AudioRecorder({ onRecordingComplete, disabled }) {
         {isRecording ? (
           <>
             <StopIcon className="h-5 w-5 mr-2" />
-            停止录音
+            Stop Recording
           </>
         ) : (
           <>
             <MicrophoneIcon className="h-5 w-5 mr-2" />
-            开始录音
+            Start Recording
           </>
         )}
       </button>
