@@ -47,13 +47,6 @@ main:
                   - stage: "audio_processing"
                   - timestamp: ${timestamp}
 
-    - checkAudioResponse:
-        switch:
-          - condition: ${"error" in audio_response.body}
-            next: handleProcessError
-          - condition: ${true}
-            next: convertAudioToText
-
     - convertAudioToText:
         try:
           call: http.post
@@ -74,38 +67,10 @@ main:
                   - stage: "speech_to_text"
                   - timestamp: ${timestamp}
 
-    - logSTTResponse:
-        assign:
-          - log_data:
-              - response: ${stt_response}
-              - body: ${stt_response.body}
-
-    - decodeSTTResponse:
-        assign:
-          - stt_data: ${json.decode(stt_response.body)}
-
     - processSTTResponse:
         assign:
           - text_for_gloss:
-              - ${stt_data.text}
-
-    - checkSTTResult:
-        switch:
-          - condition: ${len(text_for_gloss) == 0}
-            next: returnSTTError
-          - condition: ${text_for_gloss[0] == ""}
-            next: returnSTTError
-          - condition: ${text_for_gloss[0] == null}
-            next: returnSTTError
-          - condition: ${true}
-            next: convertToGloss
-
-    - returnSTTError:
-        return:
-          - error: "語音轉文字錯誤"
-          - details: ${stt_data.error}
-          - stage: "speech_to_text"
-          - timestamp: ${timestamp}
+              - ${stt_response.body.text}
 
     - convertToGloss:
         try:
@@ -127,21 +92,13 @@ main:
                   - stage: "gloss_conversion"
                   - timestamp: ${timestamp}
 
-    - checkGlossResponse:
-        switch:
-          - condition: ${"error" in gloss_response.body}
-            next: handleGlossResponseError
-          - condition: ${true}
-            next: getVideos
-
-    # Gloss 轉影片
     - getVideos:
         try:
           call: http.post
           args:
             url: ${base_url + "/gloss-to-video"}
             body:
-              gloss: ${gloss_response.body.gloss}  # Using gloss_response instead of gloss_data
+              gloss: ${gloss_response.body.gloss}
             auth:
               type: OIDC
           result: video_response
@@ -155,108 +112,13 @@ main:
                   stage: "video_lookup"
                   timestamp: ${timestamp}
 
-    # 解析視頻響應
-    - parseVideoResponse:
-        assign:
-          - video_data: ${video_response.body}
-
-    # 檢查影片響應
-    - checkVideoResponse:
-        switch:
-          - condition: ${not("video_mappings" in video_data)}
-            next: handleVideoFormatError
-        next: prepareVideoMerge
-
-    # 準備影片合併
-    - prepareVideoMerge:
-        assign:
-          - video_mappings: ${video_data.video_mappings}
-          - video_paths: []
-
-    # 提取影片路徑
-    - extractPaths:
-        for:
-          value: mapping
-          in: ${video_mappings}
-          steps:
-            - appendPath:
-                assign:
-                  - video_paths: ${list.concat(video_paths, mapping.video_path)}
-
-    # 合併影片
-    - mergeVideos:
-        try:
-          call: http.post
-          args:
-            url: ${base_url + "/merge_videos"}
-            body:
-              video_paths: ${video_paths}
-              execution_id: ${execution_id}
-              timestamp: ${timestamp}
-            auth:
-              type: OIDC
-          result: merged_video_response
-        except:
-          as: e
-          steps:
-            - handleMergeException:
-                return:
-                  error: "影片合併失敗"
-                  details: ${e}
-                  stage: "video_merge"
-                  timestamp: ${timestamp}
-                  debug_info:
-                    video_paths: ${video_paths}
-                    execution_id: ${execution_id}
-
-    # 解析合併響應
-    - assignMergeData:
-        assign:
-          - merge_data: ${merged_video_response.body}
-
-    # 檢查合併響應
-    - checkMergeResponse:
-        switch:
-          - condition: ${"error" in merge_data}
-            next: handleMergeResponseError
-        next: prepareResult
-
-    - handleProcessError:
-        return:
-          - error: "音頻處理錯誤"
-          - details: ${audio_response.body.error}
-          - stage: "audio_processing"
-          - timestamp: ${timestamp}
-
-    - handleGlossResponseError:
-        return:
-          - error: "Gloss 生成錯誤"
-          - details: ${gloss_response.body.error}
-          - stage: "gloss_generation"
-          - timestamp: ${timestamp}
-
-    - handleVideoFormatError:
-        return:
-          - error: "影片響應格式錯誤"
-          - details: "找不到影片映射資訊"
-          - stage: "video_response_validation"
-          - timestamp: ${timestamp}
-
-    - handleMergeResponseError:
-        return:
-          - error: "影片合併響應錯誤"
-          - details: ${merge_data.error}
-          - stage: "merge_response"
-          - timestamp: ${timestamp}
-
     - prepareResult:
         assign:
           - result:
               - success: true
               - original_input: ${args}
               - gloss_response: ${gloss_response.body}
-              - video_response: ${video_data}
-              - merged_video: ${merge_data}
+              - video_response: ${video_response.body}
               - execution_info:
                   - execution_id: ${execution_id}
                   - timestamp: ${timestamp}

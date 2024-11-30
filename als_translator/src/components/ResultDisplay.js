@@ -1,25 +1,166 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { PlayCircle, PauseCircle, SkipForward, SkipBack, Volume2, RefreshCcw } from "lucide-react";
 
-const VideoPlayer = ({ url }) => {
-  const videoRef = React.useRef(null);
+const VideoPlaylist = ({ videos }) => {
+  const [currentVideoIndex, setCurrentVideoIndex] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [autoplay, setAutoplay] = useState(true);
+  const videoRef = useRef(null);
+  
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
 
-  React.useEffect(() => {
-    if (videoRef.current) {
-      videoRef.current.load();
+    const handleEnded = () => {
+      if (currentVideoIndex < videos.length - 1) {
+        setCurrentVideoIndex(prev => prev + 1);
+      } else {
+        setCurrentVideoIndex(0);
+      }
+    };
+
+    const handleTimeUpdate = () => {
+      const progress = (video.currentTime / video.duration) * 100;
+      setProgress(progress);
+    };
+
+    const handlePlay = () => {
+      setIsPlaying(true);
+    };
+
+    const handlePause = () => {
+      setIsPlaying(false);
+    };
+
+    video.addEventListener('ended', handleEnded);
+    video.addEventListener('timeupdate', handleTimeUpdate);
+    video.addEventListener('play', handlePlay);
+    video.addEventListener('pause', handlePause);
+
+    return () => {
+      video.removeEventListener('ended', handleEnded);
+      video.removeEventListener('timeupdate', handleTimeUpdate);
+      video.removeEventListener('play', handlePlay);
+      video.removeEventListener('pause', handlePause);
+    };
+  }, [currentVideoIndex, videos.length]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    if (autoplay && isPlaying) {
+      video.play().catch(error => {
+        console.log('Autoplay prevented:', error);
+      });
     }
-  }, [url]);
+  }, [currentVideoIndex, autoplay, isPlaying]);
+
+  const handlePlayPause = () => {
+    if (videoRef.current) {
+      if (isPlaying) {
+        videoRef.current.pause();
+      } else {
+        videoRef.current.play();
+      }
+      setIsPlaying(!isPlaying);
+    }
+  };
+
+  const handlePrevious = () => {
+    if (currentVideoIndex > 0) {
+      setCurrentVideoIndex(prev => prev - 1);
+    } else {
+      setCurrentVideoIndex(videos.length - 1);
+    }
+  };
+
+  const handleNext = () => {
+    if (currentVideoIndex < videos.length - 1) {
+      setCurrentVideoIndex(prev => prev + 1);
+    } else {
+      setCurrentVideoIndex(0);
+    }
+  };
+
+  const toggleAutoplay = () => {
+    setAutoplay(!autoplay);
+  };
 
   return (
-    <div className="relative w-full">
-      <video
-        ref={videoRef}
-        controls
-        className="w-full h-auto rounded-lg shadow-sm"
-        key={url}
-      >
-        <source src={`${url}?t=${Date.now()}`} type="video/mp4" />
-        Your browser does not support video playback
-      </video>
+    <div className="max-w-fit mx-auto bg-white rounded-lg p-4" style={{ maxWidth: '500px' }}>
+      <div className="relative w-auto">
+        <video
+          ref={videoRef}
+          className="rounded-lg w-full"
+          key={videos[currentVideoIndex]?.video_url}
+          autoPlay={autoplay}
+          onLoadedMetadata={() => {
+            if (autoplay && isPlaying) {
+              videoRef.current.play();
+            }
+          }}
+        >
+          <source src={videos[currentVideoIndex]?.video_url} type="video/mp4" />
+          Your browser does not support video playback
+        </video>
+        
+        <div className="w-full bg-gray-200 h-1 mt-2 rounded">
+          <div 
+            className="bg-indigo-600 h-1 rounded transition-all duration-300"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between mt-4">
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={toggleAutoplay}
+            className={`flex items-center space-x-1 px-2 py-1 rounded ${
+              autoplay ? 'text-green-600' : 'text-gray-400'
+            }`}
+          >
+            <RefreshCcw className="w-4 h-4" />
+            <span className="text-xs">Loop</span>
+          </button>
+          <span className="text-sm text-gray-500">
+            Sign {currentVideoIndex + 1} of {videos.length}
+          </span>
+        </div>
+        
+        <div className="flex items-center space-x-4">
+          <button 
+            onClick={handlePrevious}
+            className="p-2 hover:text-indigo-600"
+          >
+            <SkipBack className="w-6 h-6" />
+          </button>
+          
+          <button 
+            onClick={handlePlayPause}
+            className="p-2 hover:text-indigo-600 transition-colors duration-200"
+          >
+            {isPlaying ? 
+              <PauseCircle className="w-8 h-8" /> : 
+              <PlayCircle className="w-8 h-8" />
+            }
+          </button>
+          
+          <button 
+            onClick={handleNext}
+            className="p-2 hover:text-indigo-600"
+          >
+            <SkipForward className="w-6 h-6" />
+          </button>
+        </div>
+
+        <div className="flex items-center space-x-2">
+          <Volume2 className="w-5 h-5 text-gray-500" />
+          <p className="text-sm text-gray-500">{videos[currentVideoIndex]?.gloss}</p>
+        </div>
+      </div>
     </div>
   );
 };
@@ -45,7 +186,7 @@ const AudioPlayer = ({ audioPath }) => {
 };
 
 const ResultCard = ({ title, children, indicator = "indigo" }) => (
-  <div className="bg-white rounded-lg shadow p-4 mb-4">
+  <div className="bg-white rounded-lg shadow-md p-4 mb-4">
     <h3 className="text-base font-semibold text-gray-800 mb-2 flex items-center">
       <span className={`w-1.5 h-1.5 bg-${indicator}-500 rounded-full mr-2`}></span>
       {title}
@@ -57,12 +198,10 @@ const ResultCard = ({ title, children, indicator = "indigo" }) => (
 export function ResultDisplay({ result }) {
   if (!result || !Array.isArray(result)) return null;
 
-  // 從陣列中取得各個部分的資料
   const successInfo = result.find(item => 'success' in item);
   const originalInput = result.find(item => 'original_input' in item)?.original_input;
   const glossResponse = result.find(item => 'gloss_response' in item)?.gloss_response;
   const videoResponse = result.find(item => 'video_response' in item)?.video_response;
-  const mergedVideo = result.find(item => 'merged_video' in item)?.merged_video;
   const executionInfo = result.find(item => 'execution_info' in item)?.execution_info;
 
   if (!successInfo?.success) {
@@ -82,14 +221,12 @@ export function ResultDisplay({ result }) {
       {(glossResponse?.original_text || originalInput?.text || originalInput?.audio_path) && (
         <ResultCard title="Original Input" indicator="indigo">
           <div>
-            {/* 顯示識別出的文字或原始文字 */}
             {(glossResponse?.original_text || originalInput?.text) && (
               <p className="text-gray-700">
                 {glossResponse?.original_text || originalInput?.text}
               </p>
             )}
             
-            {/* 音頻播放器 */}
             {originalInput?.audio_path && (
               <AudioPlayer audioPath={originalInput.audio_path} />
             )}
@@ -123,41 +260,17 @@ export function ResultDisplay({ result }) {
         </ResultCard>
       )}
 
-      {/* Merged Video */}
-      {mergedVideo?.merged_video_url && (
-        <ResultCard title="Complete Sign Language Video" indicator="green">
-          <VideoPlayer url={mergedVideo.merged_video_url} />
-        </ResultCard>
-      )}
-
-      {/* Individual Video Clips */}
+      {/* Video Playlist */}
       {videoResponse?.video_mappings && videoResponse.video_mappings.length > 0 && (
-        <ResultCard 
-          title={`Individual Sign Language Clips (${videoResponse.total_clips} clips)`} 
-          indicator="pink"
-        >
-          <div className="grid gap-4 mt-2">
-            {videoResponse.video_mappings.map((mapping, index) => (
-              <div 
-                key={index} 
-                className="p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="font-medium text-gray-900">
-                    Sign for "{mapping.gloss}"
-                  </h4>
-                </div>
-                <VideoPlayer url={mapping.video_url} />
-              </div>
-            ))}
-          </div>
+        <ResultCard title={`Sign Language Videos (${videoResponse.total_clips} signs)`} indicator="green">
+          <VideoPlaylist videos={videoResponse.video_mappings} />
         </ResultCard>
       )}
 
       {/* Execution Info */}
       {executionInfo && (
         <div className="text-xs text-gray-400 mt-4">
-          Processed at: {executionInfo[1]?.timestamp || videoResponse?.timestamp || mergedVideo?.timestamp}
+          Processed at: {executionInfo[1]?.timestamp || videoResponse?.timestamp}
         </div>
       )}
     </div>
