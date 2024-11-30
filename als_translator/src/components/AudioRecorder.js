@@ -82,6 +82,7 @@ export function AudioRecorder({ onRecordingComplete, disabled }) {
       
           setProcessingStatus("正在轉錄音頻...");
           
+          // 添加任務參數來強制輸出英文
           const response = await fetch(
             "https://api-inference.huggingface.co/models/openai/whisper-base",
             {
@@ -90,7 +91,14 @@ export function AudioRecorder({ onRecordingComplete, disabled }) {
                 Authorization: `Bearer ${HUGGING_FACE_TOKEN}`,
                 "Content-Type": "application/json",
               },
-              body: data
+              body: JSON.stringify({
+                inputs: Array.from(data),
+                parameters: {
+                  task: "translate",  // 使用翻譯任務
+                  language: "en",     // 指定源語言檢測
+                  return_timestamps: false
+                }
+              })
             }
           );
       
@@ -101,10 +109,9 @@ export function AudioRecorder({ onRecordingComplete, disabled }) {
           const result = await response.json();
           console.log('API 返回結果:', result);
       
-          // 直接傳遞結果對象
           onRecordingComplete({ 
             success: true, 
-            text: result  // 讓父組件處理結果格式化
+            text: result  
           });
       
         } catch (error) {
@@ -122,7 +129,7 @@ export function AudioRecorder({ onRecordingComplete, disabled }) {
       };
 
       mediaRecorderRef.current = mediaRecorder;
-      mediaRecorder.start(1000); // 每秒產生一個數據塊
+      mediaRecorder.start(1000);
       setIsRecording(true);
 
       recordingTimeoutRef.current = setTimeout(() => {
@@ -145,7 +152,6 @@ export function AudioRecorder({ onRecordingComplete, disabled }) {
     }
   };
 
-  // 清理函數
   React.useEffect(() => {
     return () => {
       if (mediaRecorderRef.current) {
