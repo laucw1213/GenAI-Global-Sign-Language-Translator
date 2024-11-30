@@ -2,233 +2,158 @@ import React, { useState, useRef } from "react";
 import { MicrophoneIcon, StopIcon } from "@heroicons/react/24/solid";
 
 const HUGGING_FACE_TOKEN = "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";
+const MAX_RECORDING_TIME = 10000; // 10 seconds
 
 export function AudioRecorder({ onRecordingComplete, disabled }) {
   const [isRecording, setIsRecording] = useState(false);
-  const [mediaRecorder, setMediaRecorder] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStatus, setProcessingStatus] = useState("");
-  const audioContextRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const recordingTimeoutRef = useRef(null);
 
-  // Whisper API call
-  const queryWhisperAPI = async (audioBlob) => {
-    setProcessingStatus("Calling Whisper API...");
-    try {
-      // 確保音頻數據正確格式化
-      const formData = new FormData();
-      formData.append('audio', audioBlob, 'audio.wav');
-      
-      const response = await fetch(
-        "https://api-inference.huggingface.co/models/openai/whisper-base",
-        {
-          headers: {
-            Authorization: `Bearer ${HUGGING_FACE_TOKEN}`
-            // 移除 Content-Type，讓瀏覽器自動設置正確的 multipart/form-data
-          },
-          method: "POST",
-          body: formData
-        }
-      );
-  
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Whisper API error: ${response.status} - ${errorText}`);
+  const getMediaRecorderMimeType = () => {
+    const types = [
+      'audio/webm;codecs=opus',
+      'audio/webm',
+      'audio/ogg;codecs=opus',
+      'audio/ogg'
+    ];
+    
+    for (const type of types) {
+      if (MediaRecorder.isTypeSupported(type)) {
+        console.log('使用音頻格式:', type);
+        return type;
       }
-  
-      const result = await response.json();
-      console.log('Whisper API response:', result); // 添加更詳細的日誌
-      return result;
-    } catch (error) {
-      console.error("Whisper API detailed error:", error);
-      throw error;
     }
+    
+    throw new Error('瀏覽器不支持任何可用的音頻格式');
   };
 
-  const processAudioData = async (wavBlob) => {
-    setIsProcessing(true);
-    try {
-      // First try Whisper API
-      const whisperResult = await queryWhisperAPI(wavBlob);
-      
-      if (whisperResult && whisperResult.text) {
-        setProcessingStatus("Transcription successful!");
-        return {
-          success: true,
-          text: whisperResult.text,
-          source: 'whisper'
-        };
-      }
-
-      // Fallback to original upload process
-      setProcessingStatus("Uploading to server...");
-      const formData = new FormData();
-      formData.append('file', wavBlob, 'recording.wav');
-
-      const response = await fetch('https://asia-east1-genasl.cloudfunctions.net/upload-audio', {
-        method: 'POST',
-        body: formData
-      });
-      const result = await response.json();
-
-      if (result.success) {
-        return {
-          success: true,
-          file_path: result.file_path,
-          source: 'upload'
-        };
-      } else {
-        throw new Error(result.error || 'Upload failed');
-      }
-    } catch (error) {
-      console.error('Audio processing error:', error);
-      throw error;
-    } finally {
-      setIsProcessing(false);
-      setProcessingStatus("");
-    }
-  };
-
-  // Check microphone permission
   const checkMicrophonePermission = async () => {
     try {
-      const permission = await navigator.permissions.query({ name: 'microphone' });
-      if (permission.state === 'denied') {
-        throw new Error('Microphone permission denied');
-      }
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(track => track.stop());
       return true;
     } catch (error) {
-      console.error('Microphone permission error:', error);
+      console.error('麥克風權限錯誤:', error);
       return false;
     }
   };
 
-  // Start recording
   const startRecording = async () => {
     if (!(await checkMicrophonePermission())) {
-      alert("Please allow microphone access to record audio");
+      alert("請允許使用麥克風以進行錄音");
       return;
     }
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { 
+        audio: {
           channelCount: 1,
-          sampleRate: 16000
+          sampleRate: 16000,
+          echoCancellation: true,
+          noiseSuppression: true
         }
       });
 
-      audioContextRef.current = new AudioContext({ sampleRate: 16000 });
-      const source = audioContextRef.current.createMediaStreamSource(stream);
-      const processor = audioContextRef.current.createScriptProcessor(4096, 1, 1);
-      const chunks = [];
+      const mimeType = getMediaRecorderMimeType();
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: mimeType,
+        audioBitsPerSecond: 16000
+      });
 
-      source.connect(processor);
-      processor.connect(audioContextRef.current.destination);
+      audioChunksRef.current = [];
 
-      processor.onaudioprocess = (e) => {
-        const inputBuffer = e.inputBuffer.getChannelData(0);
-        chunks.push(new Float32Array(inputBuffer));
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
       };
 
-      setMediaRecorder({
-        stream,
-        source,
-        processor,
-        audioContext: audioContextRef.current,
-        chunks,
-        stop: () => {
-          processor.disconnect();
-          source.disconnect();
-          stream.getTracks().forEach(track => track.stop());
-
-          const mergedData = mergeBuffers(chunks, chunks.length * 4096);
-          const wavBlob = createWaveBlob(mergedData, audioContextRef.current.sampleRate);
-
-          // Process the recorded audio
-          processAudioData(wavBlob).then(result => {
-            if (result.success) {
-              onRecordingComplete(result);
+      mediaRecorder.onstop = async () => {
+        try {
+          setIsProcessing(true);
+          const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+          console.log('錄音完成，大小:', audioBlob.size, '類型:', mimeType);
+      
+          const arrayBuffer = await audioBlob.arrayBuffer();
+          const data = new Uint8Array(arrayBuffer);
+      
+          setProcessingStatus("正在轉錄音頻...");
+          
+          const response = await fetch(
+            "https://api-inference.huggingface.co/models/openai/whisper-base",
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${HUGGING_FACE_TOKEN}`,
+                "Content-Type": "application/json",
+              },
+              body: data
             }
-          }).catch(error => {
-            console.error('Processing error:', error);
-            alert('Error processing audio. Please try again.');
+          );
+      
+          if (!response.ok) {
+            throw new Error(`API 錯誤: ${response.status}`);
+          }
+      
+          const result = await response.json();
+          console.log('API 返回結果:', result);
+      
+          // 直接傳遞結果對象
+          onRecordingComplete({ 
+            success: true, 
+            text: result  // 讓父組件處理結果格式化
           });
+      
+        } catch (error) {
+          console.error('音頻處理錯誤:', error);
+          onRecordingComplete({ 
+            success: false, 
+            error: error.message || '音頻處理錯誤' 
+          });
+        } finally {
+          setIsProcessing(false);
+          setProcessingStatus("");
+          audioChunksRef.current = [];
+          stream.getTracks().forEach(track => track.stop());
         }
-      });
+      };
 
+      mediaRecorderRef.current = mediaRecorder;
+      mediaRecorder.start(1000); // 每秒產生一個數據塊
       setIsRecording(true);
 
-      // Automatically stop after 10 seconds
-      setTimeout(() => {
+      recordingTimeoutRef.current = setTimeout(() => {
         if (isRecording) {
           stopRecording();
         }
-      }, 10000);
+      }, MAX_RECORDING_TIME);
 
     } catch (err) {
-      console.error("Recording error:", err);
-      alert("Error starting recording: " + err.message);
+      console.error("錄音錯誤:", err);
+      alert("無法啟動錄音: " + err.message);
     }
   };
 
-  // Stop recording
   const stopRecording = () => {
-    if (mediaRecorder && isRecording) {
-      mediaRecorder.stop();
+    if (mediaRecorderRef.current && isRecording) {
+      clearTimeout(recordingTimeoutRef.current);
+      mediaRecorderRef.current.stop();
       setIsRecording(false);
-      setMediaRecorder(null);
     }
   };
 
-  // Merge audio buffers
-  const mergeBuffers = (buffers, length) => {
-    const result = new Float32Array(length);
-    let offset = 0;
-    for (const buffer of buffers) {
-      result.set(buffer, offset);
-      offset += buffer.length;
-    }
-    return result;
-  };
-
-  // Create WAV blob
-  const createWaveBlob = (samples, sampleRate) => {
-    const buffer = new ArrayBuffer(44 + samples.length * 2);
-    const view = new DataView(buffer);
-
-    // Write WAV header
-    writeString(view, 0, 'RIFF');
-    view.setUint32(4, 36 + samples.length * 2, true);
-    writeString(view, 8, 'WAVE');
-    writeString(view, 12, 'fmt ');
-    view.setUint32(16, 16, true);
-    view.setUint16(20, 1, true);
-    view.setUint16(22, 1, true);
-    view.setUint32(24, sampleRate, true);
-    view.setUint32(28, sampleRate * 2, true);
-    view.setUint16(32, 2, true);
-    view.setUint16(34, 16, true);
-    writeString(view, 36, 'data');
-    view.setUint32(40, samples.length * 2, true);
-
-    // Write audio data
-    floatTo16BitPCM(view, 44, samples);
-
-    return new Blob([buffer], { type: 'audio/wav' });
-  };
-
-  const writeString = (view, offset, string) => {
-    for (let i = 0; i < string.length; i++) {
-      view.setUint8(offset + i, string.charCodeAt(i));
-    }
-  };
-
-  const floatTo16BitPCM = (output, offset, input) => {
-    for (let i = 0; i < input.length; i++, offset += 2) {
-      const s = Math.max(-1, Math.min(1, input[i]));
-      output.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
-    }
-  };
+  // 清理函數
+  React.useEffect(() => {
+    return () => {
+      if (mediaRecorderRef.current) {
+        mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+      }
+      clearTimeout(recordingTimeoutRef.current);
+    };
+  }, []);
 
   return (
     <div className="flex flex-col items-center space-y-4">
@@ -250,12 +175,12 @@ export function AudioRecorder({ onRecordingComplete, disabled }) {
         {isRecording ? (
           <>
             <StopIcon className="h-5 w-5 mr-2" />
-            Stop Recording
+            停止錄音
           </>
         ) : (
           <>
             <MicrophoneIcon className="h-5 w-5 mr-2" />
-            Start Recording
+            開始錄音
           </>
         )}
       </button>

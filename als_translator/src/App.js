@@ -15,28 +15,35 @@ const FileUploadButton = ({ disabled, onTranscriptionComplete }) => {
   const [processingStatus, setProcessingStatus] = useState("");
 
   const queryWhisperAPI = async (audioBlob) => {
-    setProcessingStatus("Transcribing audio...");
+    setProcessingStatus("轉錄音頻中...");
     try {
-      const formData = new FormData();
-      formData.append('audio', audioBlob, 'audio.wav');
-      
+      const arrayBuffer = await audioBlob.arrayBuffer();
+      const data = new Uint8Array(arrayBuffer);
+
       const response = await fetch(
         "https://api-inference.huggingface.co/models/openai/whisper-base",
         {
-          headers: { Authorization: `Bearer ${HUGGING_FACE_TOKEN}` },
+          headers: { 
+            Authorization: `Bearer ${HUGGING_FACE_TOKEN}`,
+            "Content-Type": "application/json"
+          },
           method: "POST",
-          body: formData
+          body: data
         }
       );
 
       if (!response.ok) {
-        throw new Error(`Transcription failed: ${response.status}`);
+        throw new Error(`轉錄失敗: ${response.status}`);
       }
 
       const result = await response.json();
-      return result.text;
+      if (!result) {
+        throw new Error('無有效的轉錄結果');
+      }
+
+      return result;
     } catch (error) {
-      console.error("Transcription error:", error);
+      console.error("轉錄錯誤:", error);
       throw error;
     }
   };
@@ -46,23 +53,27 @@ const FileUploadButton = ({ disabled, onTranscriptionComplete }) => {
     if (!file) return;
 
     setUploadProgress(0);
-    setProcessingStatus("Processing audio file...");
+    setProcessingStatus("處理音頻文件中...");
 
     try {
-      const transcribedText = await queryWhisperAPI(file);
+      const result = await queryWhisperAPI(file);
+      setProcessingStatus("轉錄成功!");
       
-      if (!transcribedText) {
-        throw new Error("No transcription result");
+      if (result && (result.text || typeof result === 'object')) {
+        const text = typeof result === 'object' ? result.text || JSON.stringify(result) : String(result);
+        onTranscriptionComplete(text);
+      } else {
+        throw new Error("無有效的轉錄結果");
       }
-
-      setProcessingStatus("Transcription successful!");
-      onTranscriptionComplete(transcribedText);
     } catch (error) {
-      console.error('Processing error:', error);
-      alert('Error processing audio file: ' + error.message);
+      console.error('處理錯誤:', error);
+      alert('音頻文件處理錯誤: ' + error.message);
     } finally {
       setProcessingStatus("");
       setUploadProgress(0);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -84,7 +95,7 @@ const FileUploadButton = ({ disabled, onTranscriptionComplete }) => {
         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
           <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
         </svg>
-        Upload Audio File
+        上傳音頻檔案
       </button>
 
       {(uploadProgress > 0 || processingStatus) && (
@@ -104,7 +115,7 @@ const FileUploadButton = ({ disabled, onTranscriptionComplete }) => {
       )}
 
       <p className="mt-2 text-sm text-gray-500 text-center">
-        Supports WAV, MP3, M4A formats
+        支援 WAV, MP3, M4A 格式
       </p>
     </div>
   );
@@ -126,7 +137,7 @@ function App() {
       });
 
       if (!response.ok) {
-        throw new Error(`Authentication failed: ${response.status}`);
+        throw new Error(`認證失敗: ${response.status}`);
       }
 
       const data = await response.json();
@@ -136,11 +147,11 @@ function App() {
         setLastTokenRefresh(Date.now());
         setError(null);
       } else {
-        throw new Error('No token received');
+        throw new Error('未收到令牌');
       }
     } catch (err) {
-      console.error("Authentication error:", err);
-      setError("Authentication failed: " + err.message);
+      console.error("認證錯誤:", err);
+      setError("認證失敗: " + err.message);
       setToken(null);
     }
   };
@@ -151,26 +162,65 @@ function App() {
     return () => clearInterval(tokenRefreshInterval);
   }, []);
 
+  const handleRecordingComplete = async (result) => {
+    if (!result || (!result.text && !result.success)) {
+      setError('未能獲取轉錄結果');
+      return;
+    }
+  
+    try {
+      // 處理 API 返回的不同格式情況
+      let text = '';
+      if (result.success && typeof result.text === 'object') {
+        // 如果 text 是對象，轉換為字符串
+        text = JSON.stringify(result.text);
+      } else if (result.success) {
+        // 如果是普通文本
+        text = String(result.text).trim();
+      } else if (typeof result === 'object') {
+        // 直接從 API 返回的結果中獲取文本
+        text = result.text || JSON.stringify(result);
+      } else {
+        // 其他情況，轉換為字符串
+        text = String(result).trim();
+      }
+  
+      // 確保文本格式正確
+      const textForProcess = text.replace(/['"{}[\]]/g, '').trim();
+      
+      // 傳遞給工作流
+      await processText(textForProcess);
+    } catch (error) {
+      console.error('處理錄音結果錯誤:', error);
+      setError(error.message || '處理錄音結果時發生錯誤');
+    }
+  };
+  
   const processText = async (text) => {
     if (!token) {
-      setError("Authentication required");
+      setError("需要認證");
       return;
     }
-
+  
     if (!text.trim()) {
-      setError("Please enter some text");
+      setError("請輸入文字");
       return;
     }
-
+  
     try {
       setLoading(true);
       setError(null);
       
+      // 確保文本格式正確
       const requestBody = {
-        argument: JSON.stringify({ text }),
+        argument: JSON.stringify({ 
+          text: text.trim()  // 確保文本格式簡潔
+        }),
         callLogLevel: "CALL_LOG_LEVEL_UNSPECIFIED"
       };
-
+  
+      console.log('發送到工作流的數據:', requestBody);
+  
       const response = await axios.post(WORKFLOW_URL, requestBody, {
         headers: {
           "Authorization": `Bearer ${token}`,
@@ -199,21 +249,21 @@ function App() {
             executionResult = statusResponse.data.result;
             break;
           } else if (statusResponse.data.state === "FAILED") {
-            throw new Error(statusResponse.data.error?.message || 'Workflow failed');
+            throw new Error(statusResponse.data.error?.message || '工作流程失敗');
           }
         }
 
         if (!executionResult) {
-          throw new Error('Processing timeout');
+          throw new Error('處理超時');
         }
 
         setResult(JSON.parse(executionResult));
       } else {
-        throw new Error('Invalid workflow response');
+        throw new Error('無效的工作流程響應');
       }
     } catch (err) {
-      console.error("Processing error:", err);
-      setError(err.message || 'Processing failed');
+      console.error("處理錯誤:", err);
+      setError(err.message || '處理失敗');
       setResult(null);
       
       if (err.response?.status === 401) {
@@ -232,9 +282,9 @@ function App() {
           <div className="flex items-center space-x-4">
             <HandRaisedIcon className="h-10 w-10 text-indigo-600" />
             <div>
-              <h1 className="text-2xl font-bold text-gray-800">ASL Translator</h1>
-              <p className="text-sm text-gray-600">Convert text or speech to American Sign Language</p>
-              {token && <p className="text-xs text-green-600">Connected</p>}
+              <h1 className="text-2xl font-bold text-gray-800">手語翻譯器</h1>
+              <p className="text-sm text-gray-600">將文字或語音轉換為手語</p>
+              {token && <p className="text-xs text-green-600">已連接</p>}
             </div>
           </div>
         </div>
@@ -246,26 +296,33 @@ function App() {
             <div className="bg-white rounded-2xl shadow-xl p-8">
               <div className="space-y-6">
                 <TextInput onSubmit={processText} disabled={loading || !token} />
+                
                 <div className="relative">
                   <div className="absolute inset-0 flex items-center">
                     <div className="w-full border-t border-gray-200"></div>
                   </div>
                   <div className="relative flex justify-center text-sm">
-                    <span className="px-4 bg-white text-gray-500">or</span>
+                    <span className="px-4 bg-white text-gray-500">或</span>
                   </div>
                 </div>
-                <AudioRecorder onRecordingComplete={text => processText(text)} disabled={loading || !token} />
+                
+                <AudioRecorder 
+                  onRecordingComplete={handleRecordingComplete} 
+                  disabled={loading || !token} 
+                />
+                
                 <div className="relative">
                   <div className="absolute inset-0 flex items-center">
                     <div className="w-full border-t border-gray-200"></div>
                   </div>
                   <div className="relative flex justify-center text-sm">
-                    <span className="px-4 bg-white text-gray-500">or</span>
+                    <span className="px-4 bg-white text-gray-500">或</span>
                   </div>
                 </div>
+                
                 <FileUploadButton 
                   disabled={loading || !token} 
-                  onTranscriptionComplete={text => processText(text)} 
+                  onTranscriptionComplete={processText} 
                 />
               </div>
 
@@ -293,7 +350,7 @@ function App() {
                       <div className="absolute top-0 left-0 w-full h-full rounded-full border-4 border-indigo-200 animate-pulse"></div>
                       <div className="absolute top-0 left-0 w-full h-full rounded-full border-4 border-indigo-600 border-t-transparent animate-spin"></div>
                     </div>
-                    <p className="mt-3 text-sm text-gray-500">Translating...</p>
+                    <p className="mt-3 text-sm text-gray-500">翻譯中...</p>
                   </div>
                 </div>
               )}
