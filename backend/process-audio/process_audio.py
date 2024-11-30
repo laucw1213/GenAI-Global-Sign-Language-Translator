@@ -25,18 +25,18 @@ def process_audio(request):
 
     try:
         request_json = request.get_json()
-        if not request_json or 'file_path' not in request_json:
-            return jsonify({'error': 'file_path is required'}), 400, headers
+        if not request_json or 'audio_path' not in request_json:
+            return jsonify({'error': 'audio_path is required'}), 400, headers
 
-        file_path = request_json['file_path']
+        audio_path = request_json['audio_path']
         bucket_name = 'genasl-audio-files'
 
         # Get file extension
-        file_ext = file_path.split('.')[-1].lower()
+        file_ext = audio_path.split('.')[-1].lower()
 
         storage_client = storage.Client()
         bucket = storage_client.bucket(bucket_name)
-        blob = bucket.blob(file_path)
+        blob = bucket.blob(audio_path)
 
         if not blob.exists():
             return jsonify({'error': 'File not found'}), 404, headers
