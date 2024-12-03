@@ -6,30 +6,30 @@ export function TextInput({ onSubmit, disabled }) {
   const [error, setError] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // 根據測試結果，這些是成功工作的語言
+  // Based on test results, these are the languages that work successfully
   const workingLanguages = {
-    bn: /[\u0980-\u09FF]/, // 孟加拉文
-    es: /[áéíóúüñ¿¡]/i,    // 西班牙文
-    hi: /[\u0900-\u097F]/, // 印地文
-    ja: /[\u3040-\u30FF\u31F0-\u31FF]/, // 日文
-    pt: /[áéíóúãõàèìòùâêîôûç]/i, // 葡萄牙文
-    ru: /[\u0400-\u04FF]/, // 俄文
-    tr: /[ğıİöüşç]/i,      // 土耳其文
-    vi: /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i, // 越南文
-    zh: /[\u4E00-\u9FFF]/, // 中文（簡體）
-    'zh-Hant': /[\u4E00-\u9FFF]/ // 中文（繁體）
+    bn: /[\u0980-\u09FF]/, // Bengali
+    es: /[áéíóúüñ¿¡]/i,    // Spanish
+    hi: /[\u0900-\u097F]/, // Hindi
+    ja: /[\u3040-\u30FF\u31F0-\u31FF]/, // Japanese
+    pt: /[áéíóúãõàèìòùâêîôûç]/i, // Portuguese
+    ru: /[\u0400-\u04FF]/, // Russian
+    tr: /[ğıİöüşç]/i,      // Turkish
+    vi: /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i, // Vietnamese
+    zh: /[\u4E00-\u9FFF]/, // Chinese (Simplified)
+    'zh-Hant': /[\u4E00-\u9FFF]/ // Chinese (Traditional)
   };
 
-  // 改進的語言檢測函數
+  // Improved language detection function
   const detectLanguage = (text) => {
-    // 檢查每種語言的特徵
+    // Check the characteristics of each language
     for (const [lang, pattern] of Object.entries(workingLanguages)) {
       if (pattern.test(text)) {
         return lang;
       }
     }
     
-    // 如果沒有特殊字符，假設為英文
+    // If no special characters, assume English
     return 'en';
   };
 
@@ -64,17 +64,17 @@ export function TextInput({ onSubmit, disabled }) {
           }
         } catch (translationError) {
           console.warn(`Translation failed for language ${sourceLanguage}:`, translationError);
-          setError(`無法翻譯此語言: ${sourceLanguage}`);
+          setError(`Unable to translate this language: ${sourceLanguage}`);
         }
       }
 
-      // 如果翻譯失敗或不可用，使用原文
+      // If translation fails or is unavailable, use the original text
       console.log('Using original text');
       onSubmit(text.trim());
       setText("");
     } catch (err) {
       console.error("Error:", err);
-      setError(err.message || "處理過程中發生錯誤");
+      setError(err.message || "An error occurred during processing");
       onSubmit(text.trim());
     } finally {
       setIsProcessing(false);
@@ -91,7 +91,7 @@ export function TextInput({ onSubmit, disabled }) {
       )}
       
       <div className="text-sm text-gray-600 bg-gray-50 p-4 rounded-lg">
-        支援的語言：孟加拉文、西班牙文、印地文、日文、葡萄牙文、俄文、土耳其文、越南文、中文
+        Supported languages: Bengali, Spanish, Hindi, Japanese, Portuguese, Russian, Turkish, Vietnamese, Chinese
       </div>
       
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -100,7 +100,7 @@ export function TextInput({ onSubmit, disabled }) {
           onChange={(e) => setText(e.target.value)}
           disabled={disabled || isProcessing}
           className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100"
-          placeholder="請輸入文字（支援多國語言）..."
+          placeholder="Please enter text (supports multiple languages)..."
           rows="4"
         />
         
@@ -115,10 +115,10 @@ export function TextInput({ onSubmit, disabled }) {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
-              處理中...
+              Processing...
             </span>
           ) : (
-            "翻譯並轉換為手語"
+            "Translate and Convert to Sign Language"
           )}
         </button>
       </form>

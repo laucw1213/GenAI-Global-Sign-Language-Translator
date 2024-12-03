@@ -15,7 +15,7 @@ const FileUploadButton = ({ disabled, onTranscriptionComplete }) => {
   const [processingStatus, setProcessingStatus] = useState("");
 
   const queryWhisperAPI = async (audioBlob) => {
-    setProcessingStatus("轉錄音頻中...");
+    setProcessingStatus("Transcribing audio...");
     try {
       const arrayBuffer = await audioBlob.arrayBuffer();
       const data = new Uint8Array(arrayBuffer);
@@ -33,17 +33,17 @@ const FileUploadButton = ({ disabled, onTranscriptionComplete }) => {
       );
 
       if (!response.ok) {
-        throw new Error(`轉錄失敗: ${response.status}`);
+        throw new Error(`Transcription failed: ${response.status}`);
       }
 
       const result = await response.json();
       if (!result) {
-        throw new Error('無有效的轉錄結果');
+        throw new Error('No valid transcription result');
       }
 
       return result;
     } catch (error) {
-      console.error("轉錄錯誤:", error);
+      console.error("Transcription error:", error);
       throw error;
     }
   };
@@ -53,21 +53,21 @@ const FileUploadButton = ({ disabled, onTranscriptionComplete }) => {
     if (!file) return;
 
     setUploadProgress(0);
-    setProcessingStatus("處理音頻文件中...");
+    setProcessingStatus("Processing audio file...");
 
     try {
       const result = await queryWhisperAPI(file);
-      setProcessingStatus("轉錄成功!");
+      setProcessingStatus("Transcription successful!");
       
       if (result && (result.text || typeof result === 'object')) {
         const text = typeof result === 'object' ? result.text || JSON.stringify(result) : String(result);
         onTranscriptionComplete(text);
       } else {
-        throw new Error("無有效的轉錄結果");
+        throw new Error("No valid transcription result");
       }
     } catch (error) {
-      console.error('處理錯誤:', error);
-      alert('音頻文件處理錯誤: ' + error.message);
+      console.error('Processing error:', error);
+      alert('Audio file processing error: ' + error.message);
     } finally {
       setProcessingStatus("");
       setUploadProgress(0);
@@ -95,7 +95,7 @@ const FileUploadButton = ({ disabled, onTranscriptionComplete }) => {
         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
           <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
         </svg>
-        上傳音頻檔案
+        Upload Audio File
       </button>
 
       {(uploadProgress > 0 || processingStatus) && (
@@ -115,7 +115,7 @@ const FileUploadButton = ({ disabled, onTranscriptionComplete }) => {
       )}
 
       <p className="mt-2 text-sm text-gray-500 text-center">
-        支援 WAV, MP3, M4A 格式
+        Supports WAV, MP3, M4A formats
       </p>
     </div>
   );
@@ -137,7 +137,7 @@ function App() {
       });
 
       if (!response.ok) {
-        throw new Error(`認證失敗: ${response.status}`);
+        throw new Error(`Authentication failed: ${response.status}`);
       }
 
       const data = await response.json();
@@ -147,11 +147,11 @@ function App() {
         setLastTokenRefresh(Date.now());
         setError(null);
       } else {
-        throw new Error('未收到令牌');
+        throw new Error('Token not received');
       }
     } catch (err) {
-      console.error("認證錯誤:", err);
-      setError("認證失敗: " + err.message);
+      console.error("Authentication error:", err);
+      setError("Authentication failed: " + err.message);
       setToken(null);
     }
   };
@@ -164,7 +164,7 @@ function App() {
 
   const handleRecordingComplete = async (result) => {
     if (!result || (!result.text && !result.success)) {
-      setError('未能獲取轉錄結果');
+      setError('Could not get transcription result');
       return;
     }
   
@@ -198,12 +198,12 @@ function App() {
   
   const processText = async (text) => {
     if (!token) {
-      setError("需要認證");
+      setError("Authentication required");
       return;
     }
   
     if (!text.trim()) {
-      setError("請輸入文字");
+      setError("Please enter text");
       return;
     }
   
@@ -249,21 +249,21 @@ function App() {
             executionResult = statusResponse.data.result;
             break;
           } else if (statusResponse.data.state === "FAILED") {
-            throw new Error(statusResponse.data.error?.message || '工作流程失敗');
+            throw new Error(statusResponse.data.error?.message || 'Workflow failed');
           }
         }
 
         if (!executionResult) {
-          throw new Error('處理超時');
+          throw new Error('Processing timeout');
         }
 
         setResult(JSON.parse(executionResult));
       } else {
-        throw new Error('無效的工作流程響應');
+        throw new Error('Invalid workflow response');
       }
     } catch (err) {
-      console.error("處理錯誤:", err);
-      setError(err.message || '處理失敗');
+      console.error("Processing error:", err);
+      setError(err.message || 'Processing failed');
       setResult(null);
       
       if (err.response?.status === 401) {
@@ -282,9 +282,9 @@ function App() {
           <div className="flex items-center space-x-4">
             <HandRaisedIcon className="h-10 w-10 text-indigo-600" />
             <div>
-              <h1 className="text-2xl font-bold text-gray-800">手語翻譯器</h1>
-              <p className="text-sm text-gray-600">將文字或語音轉換為手語</p>
-              {token && <p className="text-xs text-green-600">已連接</p>}
+              <h1 className="text-2xl font-bold text-gray-800">Sign Language Translator</h1>
+              <p className="text-sm text-gray-600">Convert text or speech to sign language</p>
+              {token && <p className="text-xs text-green-600">Connected</p>}
             </div>
           </div>
         </div>
@@ -302,7 +302,7 @@ function App() {
                     <div className="w-full border-t border-gray-200"></div>
                   </div>
                   <div className="relative flex justify-center text-sm">
-                    <span className="px-4 bg-white text-gray-500">或</span>
+                    <span className="px-4 bg-white text-gray-500">or</span>
                   </div>
                 </div>
                 
@@ -316,7 +316,7 @@ function App() {
                     <div className="w-full border-t border-gray-200"></div>
                   </div>
                   <div className="relative flex justify-center text-sm">
-                    <span className="px-4 bg-white text-gray-500">或</span>
+                    <span className="px-4 bg-white text-gray-500">or</span>
                   </div>
                 </div>
                 
@@ -350,7 +350,7 @@ function App() {
                       <div className="absolute top-0 left-0 w-full h-full rounded-full border-4 border-indigo-200 animate-pulse"></div>
                       <div className="absolute top-0 left-0 w-full h-full rounded-full border-4 border-indigo-600 border-t-transparent animate-spin"></div>
                     </div>
-                    <p className="mt-3 text-sm text-gray-500">翻譯中...</p>
+                    <p className="mt-3 text-sm text-gray-500">Translating...</p>
                   </div>
                 </div>
               )}

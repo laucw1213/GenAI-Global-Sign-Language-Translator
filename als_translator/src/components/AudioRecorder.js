@@ -22,12 +22,12 @@ export function AudioRecorder({ onRecordingComplete, disabled }) {
     
     for (const type of types) {
       if (MediaRecorder.isTypeSupported(type)) {
-        console.log('使用音頻格式:', type);
+        console.log('Using audio format:', type);
         return type;
       }
     }
     
-    throw new Error('瀏覽器不支持任何可用的音頻格式');
+    throw new Error('Browser does not support any available audio formats');
   };
 
   const checkMicrophonePermission = async () => {
@@ -36,14 +36,14 @@ export function AudioRecorder({ onRecordingComplete, disabled }) {
       stream.getTracks().forEach(track => track.stop());
       return true;
     } catch (error) {
-      console.error('麥克風權限錯誤:', error);
+      console.error('Microphone permission error:', error);
       return false;
     }
   };
 
   const startRecording = async () => {
     if (!(await checkMicrophonePermission())) {
-      alert("請允許使用麥克風以進行錄音");
+      alert("Please allow microphone access to record audio");
       return;
     }
 
@@ -75,14 +75,14 @@ export function AudioRecorder({ onRecordingComplete, disabled }) {
         try {
           setIsProcessing(true);
           const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
-          console.log('錄音完成，大小:', audioBlob.size, '類型:', mimeType);
+          console.log('Recording complete, size:', audioBlob.size, 'type:', mimeType);
       
           const arrayBuffer = await audioBlob.arrayBuffer();
           const data = new Uint8Array(arrayBuffer);
       
-          setProcessingStatus("正在轉錄音頻...");
+          setProcessingStatus("Transcribing audio...");
           
-          // 添加任務參數來強制輸出英文
+          // Add task parameters to force English output
           const response = await fetch(
             "https://api-inference.huggingface.co/models/openai/whisper-base",
             {
@@ -94,8 +94,8 @@ export function AudioRecorder({ onRecordingComplete, disabled }) {
               body: JSON.stringify({
                 inputs: Array.from(data),
                 parameters: {
-                  task: "translate",  // 使用翻譯任務
-                  language: "en",     // 指定源語言檢測
+                  task: "translate",  // Use translation task
+                  language: "en",     // Specify source language detection
                   return_timestamps: false
                 }
               })
@@ -103,11 +103,11 @@ export function AudioRecorder({ onRecordingComplete, disabled }) {
           );
       
           if (!response.ok) {
-            throw new Error(`API 錯誤: ${response.status}`);
+            throw new Error(`API error: ${response.status}`);
           }
       
           const result = await response.json();
-          console.log('API 返回結果:', result);
+          console.log('API response:', result);
       
           onRecordingComplete({ 
             success: true, 
@@ -115,10 +115,10 @@ export function AudioRecorder({ onRecordingComplete, disabled }) {
           });
       
         } catch (error) {
-          console.error('音頻處理錯誤:', error);
+          console.error('Audio processing error:', error);
           onRecordingComplete({ 
             success: false, 
-            error: error.message || '音頻處理錯誤' 
+            error: error.message || 'Audio processing error' 
           });
         } finally {
           setIsProcessing(false);
@@ -139,8 +139,8 @@ export function AudioRecorder({ onRecordingComplete, disabled }) {
       }, MAX_RECORDING_TIME);
 
     } catch (err) {
-      console.error("錄音錯誤:", err);
-      alert("無法啟動錄音: " + err.message);
+      console.error("Recording error:", err);
+      alert("Unable to start recording: " + err.message);
     }
   };
 
@@ -181,12 +181,12 @@ export function AudioRecorder({ onRecordingComplete, disabled }) {
         {isRecording ? (
           <>
             <StopIcon className="h-5 w-5 mr-2" />
-            停止錄音
+            Stop Recording
           </>
         ) : (
           <>
             <MicrophoneIcon className="h-5 w-5 mr-2" />
-            開始錄音
+            Start Recording
           </>
         )}
       </button>
