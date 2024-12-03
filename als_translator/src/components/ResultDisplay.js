@@ -7,7 +7,8 @@ const VideoPlaylist = ({ videos }) => {
   const [progress, setProgress] = useState(0);
   const [autoplay, setAutoplay] = useState(true);
   const videoRef = useRef(null);
-  
+  const nextVideoRef = useRef(null); // Reference for preloading next video
+
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -23,6 +24,11 @@ const VideoPlaylist = ({ videos }) => {
     const handleTimeUpdate = () => {
       const progress = (video.currentTime / video.duration) * 100;
       setProgress(progress);
+
+      // Preload next video when current video is near the end
+      if (video.duration - video.currentTime < 0.5 && nextVideoRef.current) {
+        nextVideoRef.current.load();
+      }
     };
 
     const handlePlay = () => {
@@ -38,6 +44,9 @@ const VideoPlaylist = ({ videos }) => {
     video.addEventListener('play', handlePlay);
     video.addEventListener('pause', handlePause);
 
+    // Preload the video when it becomes current
+    video.load();
+
     return () => {
       video.removeEventListener('ended', handleEnded);
       video.removeEventListener('timeupdate', handleTimeUpdate);
@@ -51,11 +60,23 @@ const VideoPlaylist = ({ videos }) => {
     if (!video) return;
 
     if (autoplay && isPlaying) {
-      video.play().catch(error => {
-        console.log('Autoplay prevented:', error);
-      });
+      const playPromise = video.play();
+      if (playPromise) {
+        playPromise.catch(error => {
+          console.log('Autoplay prevented:', error);
+        });
+      }
     }
   }, [currentVideoIndex, autoplay, isPlaying]);
+
+  // Preload next video
+  useEffect(() => {
+    const nextIndex = (currentVideoIndex + 1) % videos.length;
+    if (nextVideoRef.current) {
+      nextVideoRef.current.src = videos[nextIndex]?.video_url;
+      nextVideoRef.current.load();
+    }
+  }, [currentVideoIndex, videos]);
 
   const handlePlayPause = () => {
     if (videoRef.current) {
@@ -89,13 +110,15 @@ const VideoPlaylist = ({ videos }) => {
   };
 
   return (
-    <div className="max-w-fit mx-auto bg-white rounded-lg p-4" style={{ maxWidth: '500px' }}>
+    <div className="max-w-fit mx-auto bg-white rounded-lg p-4" style={{ maxWidth: '350px' }}>
       <div className="relative w-auto">
         <video
           ref={videoRef}
           className="rounded-lg w-full"
           key={videos[currentVideoIndex]?.video_url}
           autoPlay={autoplay}
+          playsInline
+          preload="auto"
           onLoadedMetadata={() => {
             if (autoplay && isPlaying) {
               videoRef.current.play();
@@ -104,6 +127,16 @@ const VideoPlaylist = ({ videos }) => {
         >
           <source src={videos[currentVideoIndex]?.video_url} type="video/mp4" />
           Your browser does not support video playback
+        </video>
+        
+        {/* Hidden video element for preloading next video */}
+        <video
+          ref={nextVideoRef}
+          style={{ display: 'none' }}
+          preload="auto"
+          playsInline
+        >
+          <source type="video/mp4" />
         </video>
         
         <div className="w-full bg-gray-200 h-1 mt-2 rounded">
@@ -262,7 +295,11 @@ export function ResultDisplay({ result }) {
 
       {/* Video Playlist */}
       {videoResponse?.video_mappings && videoResponse.video_mappings.length > 0 && (
-        <ResultCard title={`Sign Language Videos (${videoResponse.total_clips} signs)`} indicator="green">
+        <ResultCard 
+        title={`Sign Language Videos (${videoResponse.total_clips} signs)`} 
+        indicator="green"
+        className="max-w-md" // Add this class to limit width
+      >
           <VideoPlaylist videos={videoResponse.video_mappings} />
         </ResultCard>
       )}
