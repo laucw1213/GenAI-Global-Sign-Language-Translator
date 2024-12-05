@@ -2,124 +2,12 @@ import React, { useState, useEffect } from "react";
 import { TextInput } from "./components/TextInput";
 import { AudioRecorder } from "./components/AudioRecorder";
 import { ResultDisplay } from "./components/ResultDisplay";
-import axios from "axios";
+import { UploadFile } from "./components/UploadFile";
 import { HandRaisedIcon } from "@heroicons/react/24/outline";
+import axios from "axios";
 
 const WORKFLOW_URL = "https://workflowexecutions.googleapis.com/v1/projects/genasl/locations/asia-east1/workflows/asl-translation/executions";
 const AUTH_URL = "https://asia-east1-genasl.cloudfunctions.net/get-auth-token";
-const HUGGING_FACE_TOKEN = "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";
-
-const FileUploadButton = ({ disabled, onTranscriptionComplete }) => {
-  const fileInputRef = React.useRef(null);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [processingStatus, setProcessingStatus] = useState("");
-
-  const queryWhisperAPI = async (audioBlob) => {
-    setProcessingStatus("Transcribing audio...");
-    try {
-      const arrayBuffer = await audioBlob.arrayBuffer();
-      const data = new Uint8Array(arrayBuffer);
-
-      const response = await fetch(
-        "https://api-inference.huggingface.co/models/openai/whisper-base",
-        {
-          headers: { 
-            Authorization: `Bearer ${HUGGING_FACE_TOKEN}`,
-            "Content-Type": "application/json"
-          },
-          method: "POST",
-          body: data
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`Transcription failed: ${response.status}`);
-      }
-
-      const result = await response.json();
-      if (!result) {
-        throw new Error('No valid transcription result');
-      }
-
-      return result;
-    } catch (error) {
-      console.error("Transcription error:", error);
-      throw error;
-    }
-  };
-
-  const handleFileSelect = async (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    setUploadProgress(0);
-    setProcessingStatus("Processing audio file...");
-
-    try {
-      const result = await queryWhisperAPI(file);
-      setProcessingStatus("Transcription successful!");
-      
-      if (result && (result.text || typeof result === 'object')) {
-        const text = typeof result === 'object' ? result.text || JSON.stringify(result) : String(result);
-        onTranscriptionComplete(text);
-      } else {
-        throw new Error("No valid transcription result");
-      }
-    } catch (error) {
-      console.error('Processing error:', error);
-      alert('Audio file processing error: ' + error.message);
-    } finally {
-      setProcessingStatus("");
-      setUploadProgress(0);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-    }
-  };
-
-  return (
-    <div className="mt-6">
-      <input
-        type="file"
-        ref={fileInputRef}
-        onChange={handleFileSelect}
-        accept="audio/*"
-        className="hidden"
-        disabled={disabled}
-      />
-      <button
-        onClick={() => fileInputRef.current.click()}
-        disabled={disabled}
-        className="w-full flex justify-center items-center px-4 py-3 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-          <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
-        </svg>
-        Upload Audio File
-      </button>
-
-      {(uploadProgress > 0 || processingStatus) && (
-        <div className="mt-2 space-y-2">
-          {uploadProgress > 0 && (
-            <div className="bg-gray-200 rounded-full h-2.5">
-              <div 
-                className="bg-indigo-600 h-2.5 rounded-full"
-                style={{ width: `${uploadProgress}%` }}
-              ></div>
-            </div>
-          )}
-          {processingStatus && (
-            <p className="text-sm text-gray-600 text-center">{processingStatus}</p>
-          )}
-        </div>
-      )}
-
-      <p className="mt-2 text-sm text-gray-500 text-center">
-        Supports WAV, MP3, M4A formats
-      </p>
-    </div>
-  );
-};
 
 function App() {
   const [loading, setLoading] = useState(false);
@@ -169,30 +57,22 @@ function App() {
     }
   
     try {
-      // 處理 API 返回的不同格式情況
       let text = '';
       if (result.success && typeof result.text === 'object') {
-        // 如果 text 是對象，轉換為字符串
         text = JSON.stringify(result.text);
       } else if (result.success) {
-        // 如果是普通文本
         text = String(result.text).trim();
       } else if (typeof result === 'object') {
-        // 直接從 API 返回的結果中獲取文本
         text = result.text || JSON.stringify(result);
       } else {
-        // 其他情況，轉換為字符串
         text = String(result).trim();
       }
   
-      // 確保文本格式正確
       const textForProcess = text.replace(/['"{}[\]]/g, '').trim();
-      
-      // 傳遞給工作流
       await processText(textForProcess);
     } catch (error) {
-      console.error('處理錄音結果錯誤:', error);
-      setError(error.message || '處理錄音結果時發生錯誤');
+      console.error('Processing recording error:', error);
+      setError(error.message || 'Error processing recording result');
     }
   };
   
@@ -211,15 +91,14 @@ function App() {
       setLoading(true);
       setError(null);
       
-      // 確保文本格式正確
       const requestBody = {
         argument: JSON.stringify({ 
-          text: text.trim()  // 確保文本格式簡潔
+          text: text.trim()
         }),
         callLogLevel: "CALL_LOG_LEVEL_UNSPECIFIED"
       };
   
-      console.log('發送到工作流的數據:', requestBody);
+      console.log('Sending to workflow:', requestBody);
   
       const response = await axios.post(WORKFLOW_URL, requestBody, {
         headers: {
@@ -320,7 +199,7 @@ function App() {
                   </div>
                 </div>
                 
-                <FileUploadButton 
+                <UploadFile 
                   disabled={loading || !token} 
                   onTranscriptionComplete={processText} 
                 />

@@ -1,37 +1,12 @@
+// TextInput.js
 import React, { useState, useCallback } from 'react';
 import { AlertCircle } from 'lucide-react';
+import { processContent, getSupportedLanguages } from './apiServices';
 
 export function TextInput({ onSubmit, disabled }) {
   const [text, setText] = useState("");
   const [error, setError] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
-
-  // Based on test results, these are the languages that work successfully
-  const workingLanguages = {
-    bn: /[\u0980-\u09FF]/, // Bengali
-    es: /[áéíóúüñ¿¡]/i,    // Spanish
-    hi: /[\u0900-\u097F]/, // Hindi
-    ja: /[\u3040-\u30FF\u31F0-\u31FF]/, // Japanese
-    pt: /[áéíóúãõàèìòùâêîôûç]/i, // Portuguese
-    ru: /[\u0400-\u04FF]/, // Russian
-    tr: /[ğıİöüşç]/i,      // Turkish
-    vi: /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i, // Vietnamese
-    zh: /[\u4E00-\u9FFF]/, // Chinese (Simplified)
-    'zh-Hant': /[\u4E00-\u9FFF]/ // Chinese (Traditional)
-  };
-
-  // Improved language detection function
-  const detectLanguage = (text) => {
-    // Check the characteristics of each language
-    for (const [lang, pattern] of Object.entries(workingLanguages)) {
-      if (pattern.test(text)) {
-        return lang;
-      }
-    }
-    
-    // If no special characters, assume English
-    return 'en';
-  };
 
   const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
@@ -41,36 +16,8 @@ export function TextInput({ onSubmit, disabled }) {
     setError("");
 
     try {
-      if (window.ai?.translator) {
-        const sourceLanguage = detectLanguage(text);
-        console.log(`Detected language: ${sourceLanguage}`);
-
-        try {
-          const translator = await window.ai.translator.create({
-            sourceLanguage,
-            targetLanguage: "en"
-          });
-
-          if (translator) {
-            const translatedText = await translator.translate(text.trim());
-            console.log(`Translation result: ${translatedText}`);
-            onSubmit(translatedText);
-            setText("");
-            
-            if (typeof translator.destroy === 'function') {
-              translator.destroy();
-            }
-            return;
-          }
-        } catch (translationError) {
-          console.warn(`Translation failed for language ${sourceLanguage}:`, translationError);
-          setError(`Unable to translate this language: ${sourceLanguage}`);
-        }
-      }
-
-      // If translation fails or is unavailable, use the original text
-      console.log('Using original text');
-      onSubmit(text.trim());
+      const processedText = await processContent(text, 'text');
+      onSubmit(processedText.trim());
       setText("");
     } catch (err) {
       console.error("Error:", err);
@@ -91,7 +38,7 @@ export function TextInput({ onSubmit, disabled }) {
       )}
       
       <div className="text-sm text-gray-600 bg-gray-50 p-4 rounded-lg">
-        Supported languages: Bengali, Spanish, Hindi, Japanese, Portuguese, Russian, Turkish, Vietnamese, Chinese
+        Supported languages: {getSupportedLanguages().join(', ')}
       </div>
       
       <form onSubmit={handleSubmit} className="space-y-4">

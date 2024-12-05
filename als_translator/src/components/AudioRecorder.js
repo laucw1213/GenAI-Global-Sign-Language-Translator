@@ -1,7 +1,8 @@
-import React, { useState, useRef } from "react";
+// AudioRecorder.js
+import React, { useState, useRef, useEffect } from "react";
 import { MicrophoneIcon, StopIcon } from "@heroicons/react/24/solid";
+import { processContent } from './apiServices';
 
-const HUGGING_FACE_TOKEN = "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";
 const MAX_RECORDING_TIME = 10000; // 10 seconds
 
 export function AudioRecorder({ onRecordingComplete, disabled }) {
@@ -76,50 +77,18 @@ export function AudioRecorder({ onRecordingComplete, disabled }) {
           setIsProcessing(true);
           const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
           console.log('Recording complete, size:', audioBlob.size, 'type:', mimeType);
-      
-          const arrayBuffer = await audioBlob.arrayBuffer();
-          const data = new Uint8Array(arrayBuffer);
-      
-          setProcessingStatus("Transcribing audio...");
           
-          // Add task parameters to force English output
-          const response = await fetch(
-            "https://api-inference.huggingface.co/models/openai/whisper-base",
-            {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${HUGGING_FACE_TOKEN}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                inputs: Array.from(data),
-                parameters: {
-                  task: "translate",  // Use translation task
-                  language: "en",     // Specify source language detection
-                  return_timestamps: false
-                }
-              })
-            }
-          );
-      
-          if (!response.ok) {
-            throw new Error(`API error: ${response.status}`);
-          }
-      
-          const result = await response.json();
-          console.log('API response:', result);
-      
-          onRecordingComplete({ 
-            success: true, 
-            text: result  
-          });
-      
+          setProcessingStatus("Processing audio...");
+          const result = await processContent(audioBlob, 'audio');
+          onRecordingComplete(result);
+          
         } catch (error) {
           console.error('Audio processing error:', error);
           onRecordingComplete({ 
             success: false, 
             error: error.message || 'Audio processing error' 
           });
+        
         } finally {
           setIsProcessing(false);
           setProcessingStatus("");
@@ -127,6 +96,8 @@ export function AudioRecorder({ onRecordingComplete, disabled }) {
           stream.getTracks().forEach(track => track.stop());
         }
       };
+
+      // AudioRecorder.js (continued)
 
       mediaRecorderRef.current = mediaRecorder;
       mediaRecorder.start(1000);
@@ -152,7 +123,7 @@ export function AudioRecorder({ onRecordingComplete, disabled }) {
     }
   };
 
-  React.useEffect(() => {
+  useEffect(() => {
     return () => {
       if (mediaRecorderRef.current) {
         mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
