@@ -6,192 +6,229 @@ const VideoPlaylist = ({ videos }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [autoplay, setAutoplay] = useState(true);
-  const videoRef = useRef(null);
-  const nextVideoRef = useRef(null); // Reference for preloading next video
+  const [activeVideo, setActiveVideo] = useState('primary');
+  
+  const primaryVideoRef = useRef(null);
+  const secondaryVideoRef = useRef(null);
+  const transitionTimeoutRef = useRef(null);
+
+  // Preload all videos
+  useEffect(() => {
+    videos.forEach(video => {
+      const link = document.createElement('link');
+      link.rel = 'preload';
+      link.as = 'video';
+      link.href = video.video_url;
+      document.head.appendChild(link);
+    });
+
+    // Initialize first video
+    if (primaryVideoRef.current) {
+      primaryVideoRef.current.src = videos[0].video_url;
+      primaryVideoRef.current.load();
+    }
+  }, [videos]);
+
+  const getCurrentVideo = () => {
+    return activeVideo === 'primary' ? primaryVideoRef.current : secondaryVideoRef.current;
+  };
+
+  const getInactiveVideo = () => {
+    return activeVideo === 'primary' ? secondaryVideoRef.current : primaryVideoRef.current;
+  };
+
+  const switchToNextVideo = async () => {
+    const nextIndex = (currentVideoIndex + 1) % videos.length;
+    const inactiveVideo = getInactiveVideo();
+    
+    // Prepare the inactive video
+    inactiveVideo.src = videos[nextIndex].video_url;
+    await inactiveVideo.load();
+    
+    // Start playing the next video slightly before switching
+    const playPromise = inactiveVideo.play();
+    if (playPromise) {
+      await playPromise.catch(() => {});
+    }
+
+    // Switch videos
+    setCurrentVideoIndex(nextIndex);
+    setActiveVideo(activeVideo === 'primary' ? 'secondary' : 'primary');
+  };
 
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    const handleEnded = () => {
-      if (currentVideoIndex < videos.length - 1) {
-        setCurrentVideoIndex(prev => prev + 1);
-      } else {
-        setCurrentVideoIndex(0);
-      }
-    };
+    const currentVideo = getCurrentVideo();
+    const inactiveVideo = getInactiveVideo();
+    
+    if (!currentVideo) return;
 
     const handleTimeUpdate = () => {
-      const progress = (video.currentTime / video.duration) * 100;
+      const progress = (currentVideo.currentTime / currentVideo.duration) * 100;
       setProgress(progress);
 
-      // Preload next video when current video is near the end
-      if (video.duration - video.currentTime < 0.5 && nextVideoRef.current) {
-        nextVideoRef.current.load();
+      // Preload next video when current video is 80% complete
+      if (progress > 80) {
+        const nextIndex = (currentVideoIndex + 1) % videos.length;
+        inactiveVideo.src = videos[nextIndex].video_url;
+        inactiveVideo.load();
       }
     };
 
-    const handlePlay = () => {
-      setIsPlaying(true);
+    const handleEnded = async () => {
+      if (currentVideoIndex < videos.length - 1 || autoplay) {
+        await switchToNextVideo();
+      } else {
+        setIsPlaying(false);
+      }
     };
 
-    const handlePause = () => {
-      setIsPlaying(false);
-    };
+    const handlePlay = () => setIsPlaying(true);
+    const handlePause = () => setIsPlaying(false);
 
-    video.addEventListener('ended', handleEnded);
-    video.addEventListener('timeupdate', handleTimeUpdate);
-    video.addEventListener('play', handlePlay);
-    video.addEventListener('pause', handlePause);
-
-    // Preload the video when it becomes current
-    video.load();
+    currentVideo.addEventListener('timeupdate', handleTimeUpdate);
+    currentVideo.addEventListener('ended', handleEnded);
+    currentVideo.addEventListener('play', handlePlay);
+    currentVideo.addEventListener('pause', handlePause);
 
     return () => {
-      video.removeEventListener('ended', handleEnded);
-      video.removeEventListener('timeupdate', handleTimeUpdate);
-      video.removeEventListener('play', handlePlay);
-      video.removeEventListener('pause', handlePause);
+      currentVideo.removeEventListener('timeupdate', handleTimeUpdate);
+      currentVideo.removeEventListener('ended', handleEnded);
+      currentVideo.removeEventListener('play', handlePlay);
+      currentVideo.removeEventListener('pause', handlePause);
+      if (transitionTimeoutRef.current) {
+        clearTimeout(transitionTimeoutRef.current);
+      }
     };
-  }, [currentVideoIndex, videos.length]);
+  }, [currentVideoIndex, videos.length, autoplay, activeVideo]);
 
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
+    const currentVideo = getCurrentVideo();
+    if (!currentVideo) return;
 
     if (autoplay && isPlaying) {
-      const playPromise = video.play();
+      const playPromise = currentVideo.play();
       if (playPromise) {
-        playPromise.catch(error => {
-          console.log('Autoplay prevented:', error);
-        });
+        playPromise.catch(() => {});
       }
     }
-  }, [currentVideoIndex, autoplay, isPlaying]);
-
-  // Preload next video
-  useEffect(() => {
-    const nextIndex = (currentVideoIndex + 1) % videos.length;
-    if (nextVideoRef.current) {
-      nextVideoRef.current.src = videos[nextIndex]?.video_url;
-      nextVideoRef.current.load();
-    }
-  }, [currentVideoIndex, videos]);
+  }, [currentVideoIndex, autoplay, isPlaying, activeVideo]);
 
   const handlePlayPause = () => {
-    if (videoRef.current) {
+    const currentVideo = getCurrentVideo();
+    if (currentVideo) {
       if (isPlaying) {
-        videoRef.current.pause();
+        currentVideo.pause();
       } else {
-        videoRef.current.play();
+        currentVideo.play();
       }
       setIsPlaying(!isPlaying);
     }
   };
 
-  const handlePrevious = () => {
-    if (currentVideoIndex > 0) {
-      setCurrentVideoIndex(prev => prev - 1);
-    } else {
-      setCurrentVideoIndex(videos.length - 1);
+  const handlePrevious = async () => {
+    const prevIndex = currentVideoIndex > 0 ? currentVideoIndex - 1 : videos.length - 1;
+    const inactiveVideo = getInactiveVideo();
+    
+    inactiveVideo.src = videos[prevIndex].video_url;
+    await inactiveVideo.load();
+    
+    const playPromise = inactiveVideo.play();
+    if (playPromise) {
+      await playPromise.catch(() => {});
     }
+
+    setCurrentVideoIndex(prevIndex);
+    setActiveVideo(activeVideo === 'primary' ? 'secondary' : 'primary');
   };
 
-  const handleNext = () => {
-    if (currentVideoIndex < videos.length - 1) {
-      setCurrentVideoIndex(prev => prev + 1);
-    } else {
-      setCurrentVideoIndex(0);
-    }
+  const handleNext = async () => {
+    await switchToNextVideo();
   };
 
-  const toggleAutoplay = () => {
-    setAutoplay(!autoplay);
-  };
+  const toggleAutoplay = () => setAutoplay(!autoplay);
 
   return (
-    <div className="max-w-fit mx-auto bg-white rounded-lg p-4" style={{ maxWidth: '350px' }}>
-      <div className="relative w-auto">
-        <video
-          ref={videoRef}
-          className="rounded-lg w-full"
-          key={videos[currentVideoIndex]?.video_url}
-          autoPlay={autoplay}
-          playsInline
-          preload="auto"
-          onLoadedMetadata={() => {
-            if (autoplay && isPlaying) {
-              videoRef.current.play();
-            }
-          }}
-        >
-          <source src={videos[currentVideoIndex]?.video_url} type="video/mp4" />
-          Your browser does not support video playback
-        </video>
-        
-        {/* Hidden video element for preloading next video */}
-        <video
-          ref={nextVideoRef}
-          style={{ display: 'none' }}
-          preload="auto"
-          playsInline
-        >
-          <source type="video/mp4" />
-        </video>
-        
-        <div className="w-full bg-gray-200 h-1 mt-2 rounded">
-          <div 
-            className="bg-indigo-600 h-1 rounded transition-all duration-300"
-            style={{ width: `${progress}%` }}
-          />
+    <div className="max-w-[400px] mx-auto bg-white rounded-lg p-4 shadow-lg">
+      <div className="relative w-full" style={{ paddingBottom: '133.33%' }}>
+        <div className="absolute inset-0">
+          <div className="relative w-full h-full">
+            <div className={`absolute inset-0 transition-opacity duration-300 ${activeVideo === 'primary' ? 'opacity-100' : 'opacity-0'}`}>
+              <video
+                ref={primaryVideoRef}
+                className="rounded-lg w-full h-full object-contain bg-black"
+                playsInline
+                preload="auto"
+              >
+                <source type="video/mp4" />
+              </video>
+            </div>
+            <div className={`absolute inset-0 transition-opacity duration-300 ${activeVideo === 'secondary' ? 'opacity-100' : 'opacity-0'}`}>
+              <video
+                ref={secondaryVideoRef}
+                className="rounded-lg w-full h-full object-contain bg-black"
+                playsInline
+                preload="auto"
+              >
+                <source type="video/mp4" />
+              </video>
+            </div>
+          </div>
+          
+          <div className="absolute bottom-0 left-0 right-0 bg-gray-200 h-1">
+            <div 
+              className="bg-indigo-600 h-1 transition-all duration-300"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
         </div>
       </div>
 
-      <div className="flex items-center justify-between mt-4">
-        <div className="flex items-center space-x-2">
+      <div className="mt-4 space-y-4">
+        <div className="flex items-center justify-between">
           <button
             onClick={toggleAutoplay}
-            className={`flex items-center space-x-1 px-2 py-1 rounded ${
-              autoplay ? 'text-green-600' : 'text-gray-400'
+            className={`flex items-center space-x-1 px-3 py-1.5 rounded-full ${
+              autoplay ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'
             }`}
           >
             <RefreshCcw className="w-4 h-4" />
-            <span className="text-xs">Loop</span>
+            <span className="text-xs font-medium">Loop</span>
           </button>
-          <span className="text-sm text-gray-500">
+          
+          <span className="text-sm text-gray-500 font-medium">
             Sign {currentVideoIndex + 1} of {videos.length}
           </span>
         </div>
-        
-        <div className="flex items-center space-x-4">
+
+        <div className="flex items-center justify-between px-4">
           <button 
             onClick={handlePrevious}
-            className="p-2 hover:text-indigo-600"
+            className="p-2 hover:text-indigo-600 transition-colors duration-200 touch-manipulation"
           >
-            <SkipBack className="w-6 h-6" />
+            <SkipBack className="w-8 h-8 md:w-6 md:h-6" />
           </button>
           
           <button 
             onClick={handlePlayPause}
-            className="p-2 hover:text-indigo-600 transition-colors duration-200"
+            className="p-2 hover:text-indigo-600 transition-colors duration-200 touch-manipulation"
           >
             {isPlaying ? 
-              <PauseCircle className="w-8 h-8" /> : 
-              <PlayCircle className="w-8 h-8" />
+              <PauseCircle className="w-12 h-12 md:w-8 md:h-8" /> : 
+              <PlayCircle className="w-12 h-12 md:w-8 md:h-8" />
             }
           </button>
           
           <button 
             onClick={handleNext}
-            className="p-2 hover:text-indigo-600"
+            className="p-2 hover:text-indigo-600 transition-colors duration-200 touch-manipulation"
           >
-            <SkipForward className="w-6 h-6" />
+            <SkipForward className="w-8 h-8 md:w-6 md:h-6" />
           </button>
         </div>
 
-        <div className="flex items-center space-x-2">
-          <Volume2 className="w-5 h-5 text-gray-500" />
-          <p className="text-sm text-gray-500">{videos[currentVideoIndex]?.gloss}</p>
+        <div className="flex items-center justify-between text-sm text-gray-500 px-2">
+          <Volume2 className="w-4 h-4" />
+          <p className="ml-2 truncate">{videos[currentVideoIndex]?.gloss}</p>
         </div>
       </div>
     </div>
@@ -202,10 +239,10 @@ const AudioPlayer = ({ audioPath }) => {
   const audioUrl = `https://storage.googleapis.com/genasl-audio-files/${audioPath}`;
   
   return (
-    <div className="flex items-center space-x-2 mt-2">
+    <div className="flex flex-col md:flex-row items-center space-y-2 md:space-y-0 md:space-x-2 mt-2">
       <audio
         controls
-        className="h-8 w-48"
+        className="w-full md:w-48 h-10"
         preload="metadata"
       >
         <source src={audioUrl} type="audio/mpeg" />
@@ -249,13 +286,12 @@ export function ResultDisplay({ result }) {
   }
 
   return (
-    <div className="space-y-4">
-      {/* Original Input */}
+    <div className="space-y-4 max-w-full mx-auto">
       {(glossResponse?.original_text || originalInput?.text || originalInput?.audio_path) && (
         <ResultCard title="Original Input" indicator="indigo">
           <div>
             {(glossResponse?.original_text || originalInput?.text) && (
-              <p className="text-gray-700">
+              <p className="text-gray-700 break-words">
                 {glossResponse?.original_text || originalInput?.text}
               </p>
             )}
@@ -267,11 +303,10 @@ export function ResultDisplay({ result }) {
         </ResultCard>
       )}
 
-      {/* ASL Gloss Conversion */}
       {glossResponse && (
         <ResultCard title="ASL Gloss Conversion" indicator="purple">
           <div className="space-y-2">
-            <p className="text-lg font-medium text-gray-900">
+            <p className="text-lg font-medium text-gray-900 break-words">
               {glossResponse.gloss}
             </p>
             {glossResponse.word_count > 0 && (
@@ -284,7 +319,7 @@ export function ResultDisplay({ result }) {
                 <p>Skipped words:</p>
                 <ul className="list-disc list-inside">
                   {glossResponse.skipped_words.map((word, idx) => (
-                    <li key={idx}>{word}</li>
+                    <li key={idx} className="truncate">{word}</li>
                   ))}
                 </ul>
               </div>
@@ -293,20 +328,17 @@ export function ResultDisplay({ result }) {
         </ResultCard>
       )}
 
-      {/* Video Playlist */}
       {videoResponse?.video_mappings && videoResponse.video_mappings.length > 0 && (
         <ResultCard 
-        title={`Sign Language Videos (${videoResponse.total_clips} signs)`} 
-        indicator="green"
-        className="max-w-md" // Add this class to limit width
-      >
+          title={`Sign Language Videos (${videoResponse.total_clips} signs)`} 
+          indicator="green"
+        >
           <VideoPlaylist videos={videoResponse.video_mappings} />
         </ResultCard>
       )}
 
-      {/* Execution Info */}
       {executionInfo && (
-        <div className="text-xs text-gray-400 mt-4">
+        <div className="text-xs text-gray-400 mt-4 text-center">
           Processed at: {executionInfo[1]?.timestamp || videoResponse?.timestamp}
         </div>
       )}

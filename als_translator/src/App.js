@@ -3,7 +3,7 @@ import { TextInput } from "./components/TextInput";
 import { AudioRecorder } from "./components/AudioRecorder";
 import { ResultDisplay } from "./components/ResultDisplay";
 import { UploadFile } from "./components/UploadFile";
-import { HandRaisedIcon } from "@heroicons/react/24/outline";
+import { HandRaisedIcon, ArrowUpIcon, ArrowDownIcon } from "@heroicons/react/24/outline";
 import axios from "axios";
 
 const WORKFLOW_URL = "https://workflowexecutions.googleapis.com/v1/projects/genasl/locations/asia-east1/workflows/asl-translation/executions";
@@ -15,6 +15,7 @@ function App() {
   const [error, setError] = useState(null);
   const [token, setToken] = useState(null);
   const [lastTokenRefresh, setLastTokenRefresh] = useState(0);
+  const [showResults, setShowResults] = useState(false);
 
   const refreshToken = async () => {
     try {
@@ -49,6 +50,15 @@ function App() {
     const tokenRefreshInterval = setInterval(refreshToken, 50 * 60 * 1000);
     return () => clearInterval(tokenRefreshInterval);
   }, []);
+
+  useEffect(() => {
+    if (result) {
+      // On mobile, automatically show results when they arrive
+      if (window.innerWidth < 768) {
+        setShowResults(true);
+      }
+    }
+  }, [result]);
 
   const handleRecordingComplete = async (result) => {
     if (!result || (!result.text && !result.success)) {
@@ -153,26 +163,44 @@ function App() {
     }
   };
 
+  const toggleResults = () => {
+    setShowResults(!showResults);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-100 via-purple-50 to-pink-100">
-      <div className="container mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="absolute top-8 left-8">
-          <div className="flex items-center space-x-4">
-            <HandRaisedIcon className="h-10 w-10 text-indigo-600" />
-            <div>
-              <h1 className="text-2xl font-bold text-gray-800">Sign Language Translator</h1>
-              <p className="text-sm text-gray-600">Convert text or speech to sign language</p>
-              {token && <p className="text-xs text-green-600">Connected</p>}
+      {/* Header - Fixed for mobile, absolute for desktop */}
+      <header className="fixed md:absolute top-0 left-0 right-0 bg-white/80 backdrop-blur-sm md:bg-transparent md:backdrop-blur-none z-10 p-4 md:p-8">
+        <div className="container mx-auto">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <HandRaisedIcon className="h-8 w-8 md:h-10 md:w-10 text-indigo-600" />
+              <div>
+                <h1 className="text-xl md:text-2xl font-bold text-gray-800">Sign Language Translator</h1>
+                <p className="text-xs md:text-sm text-gray-600">Convert text or speech to sign language</p>
+                {token && <p className="text-xs text-green-600">Connected</p>}
+              </div>
             </div>
+            
+            {/* Mobile Toggle Button */}
+            {result && (
+              <button
+                onClick={toggleResults}
+                className="md:hidden rounded-full p-2 bg-indigo-600 text-white shadow-lg"
+              >
+                {showResults ? <ArrowUpIcon className="h-6 w-6" /> : <ArrowDownIcon className="h-6 w-6" />}
+              </button>
+            )}
           </div>
         </div>
+      </header>
 
-        {/* Main Content */}
-        <div className="flex min-h-screen pt-24">
-          {/* Left Input Section */}
-          <div className="w-1/2 p-8">
-            <div className="bg-white rounded-2xl shadow-xl p-8">
+      {/* Main Content */}
+      <div className="container mx-auto px-4 pt-24 md:pt-32 pb-8">
+        <div className="flex flex-col md:flex-row md:space-x-8 space-y-8 md:space-y-0">
+          {/* Input Section - Full width on mobile, half on desktop */}
+          <div className={`w-full md:w-1/2 transition-all duration-300 ${showResults ? 'hidden md:block' : 'block'}`}>
+            <div className="bg-white rounded-2xl shadow-xl p-4 md:p-8">
               <div className="space-y-6">
                 <TextInput onSubmit={processText} disabled={loading || !token} />
                 
@@ -236,8 +264,8 @@ function App() {
             </div>
           </div>
 
-          {/* Right Result Section */}
-          <div className="w-1/2 p-8">
+          {/* Result Section - Full width on mobile, half on desktop */}
+          <div className={`w-full md:w-1/2 transition-all duration-300 ${!showResults ? 'hidden md:block' : 'block'}`}>
             {result && (
               <div className="transform transition-all duration-500 ease-in-out">
                 <ResultDisplay result={result} />
@@ -246,6 +274,16 @@ function App() {
           </div>
         </div>
       </div>
+
+      {/* Mobile Back to Input Button */}
+      {showResults && (
+        <button
+          onClick={toggleResults}
+          className="fixed md:hidden bottom-6 right-6 rounded-full p-4 bg-indigo-600 text-white shadow-lg"
+        >
+          <ArrowUpIcon className="h-6 w-6" />
+        </button>
+      )}
     </div>
   );
 }
