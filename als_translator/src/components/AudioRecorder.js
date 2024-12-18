@@ -5,6 +5,9 @@ import { processContent } from './apiServices';
 
 const MAX_RECORDING_TIME = 10000; // 10 seconds
 
+// iOS device detection regex
+const IOS_REGEX = /iPhone|iPad|iPod/i;
+
 export function AudioRecorder({ onRecordingComplete, disabled }) {
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -14,11 +17,16 @@ export function AudioRecorder({ onRecordingComplete, disabled }) {
   const recordingTimeoutRef = useRef(null);
 
   const getMediaRecorderMimeType = () => {
+    // Add more supported formats for iOS devices
     const types = [
+      'audio/mp4',           // iOS priority
+      'audio/aac',           // iOS supported
       'audio/webm;codecs=opus',
       'audio/webm',
       'audio/ogg;codecs=opus',
-      'audio/ogg'
+      'audio/ogg',
+      'audio/mp3',
+      'audio/mpeg'
     ];
     
     for (const type of types) {
@@ -28,23 +36,40 @@ export function AudioRecorder({ onRecordingComplete, disabled }) {
       }
     }
     
+    // Specific error message for iOS devices
+    const isIOS = IOS_REGEX.test(navigator.userAgent);
+    if (isIOS) {
+      throw new Error('iOS devices may not support web recording. Please use the file upload feature instead.');
+    }
     throw new Error('Browser does not support any available audio formats');
   };
 
   const checkMicrophonePermission = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        } 
+      });
       stream.getTracks().forEach(track => track.stop());
       return true;
     } catch (error) {
       console.error('Microphone permission error:', error);
+      // Friendly error message for iOS devices
+      const isIOS = IOS_REGEX.test(navigator.userAgent);
+      if (isIOS) {
+        alert("iOS devices require microphone access in Settings. If recording doesn't work, please use the file upload feature.");
+      } else {
+        alert("Please allow microphone access to record audio");
+      }
       return false;
     }
   };
 
   const startRecording = async () => {
     if (!(await checkMicrophonePermission())) {
-      alert("Please allow microphone access to record audio");
       return;
     }
 
@@ -52,16 +77,17 @@ export function AudioRecorder({ onRecordingComplete, disabled }) {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           channelCount: 1,
-          sampleRate: 16000,
+          sampleRate: 44100, // Changed to more common sample rate
           echoCancellation: true,
-          noiseSuppression: true
+          noiseSuppression: true,
+          autoGainControl: true
         }
       });
 
       const mimeType = getMediaRecorderMimeType();
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType: mimeType,
-        audioBitsPerSecond: 16000
+        audioBitsPerSecond: 128000 // Higher bitrate for better quality
       });
 
       audioChunksRef.current = [];
@@ -97,8 +123,6 @@ export function AudioRecorder({ onRecordingComplete, disabled }) {
         }
       };
 
-      // AudioRecorder.js (continued)
-
       mediaRecorderRef.current = mediaRecorder;
       mediaRecorder.start(1000);
       setIsRecording(true);
@@ -111,7 +135,13 @@ export function AudioRecorder({ onRecordingComplete, disabled }) {
 
     } catch (err) {
       console.error("Recording error:", err);
-      alert("Unable to start recording: " + err.message);
+      // Specific error message for iOS devices
+      const isIOS = IOS_REGEX.test(navigator.userAgent);
+      if (isIOS) {
+        alert("iOS devices may not support web recording. Please use the file upload feature instead. Error: " + err.message);
+      } else {
+        alert("Unable to start recording: " + err.message);
+      }
     }
   };
 
