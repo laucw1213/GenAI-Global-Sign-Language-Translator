@@ -1,192 +1,245 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { PlayCircle, PauseCircle, SkipForward, SkipBack, Volume2, RefreshCcw } from "lucide-react";
 
-const VideoPlaylist = ({ videos }) => {
+const VideoPlaylist = ({ videos, originalText }) => {
   const [currentVideoIndex, setCurrentVideoIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [autoplay, setAutoplay] = useState(true);
-  const [activeVideo, setActiveVideo] = useState('primary');
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
   
-  const primaryVideoRef = useRef(null);
-  const secondaryVideoRef = useRef(null);
-  const transitionTimeoutRef = useRef(null);
-
-  // Preload all videos
+  // Video references array
+  const videoRefs = useRef(videos.map(() => React.createRef()));
+  const videoPoolSize = 3; // Preload pool size
+  const containerRef = useRef(null);
+  
+  // Initialize and preload
   useEffect(() => {
-    videos.forEach(video => {
-      const link = document.createElement('link');
-      link.rel = 'preload';
-      link.as = 'video';
-      link.href = video.video_url;
-      document.head.appendChild(link);
-    });
+    const preloadVideos = async () => {
+      // Preload first 3 videos
+      const preloadCount = Math.min(videoPoolSize, videos.length);
+      for (let i = 0; i < preloadCount; i++) {
+        const video = videoRefs.current[i].current;
+        if (video) {
+          video.src = videos[i].video_url;
+          // Set the background color of video
+          video.style.backgroundColor = '#000';
+          await video.load();
+        }
+      }
+      
+      // Start playing first video if autoplay is enabled
+      if (autoplay && videoRefs.current[0].current) {
+        try {
+          await videoRefs.current[0].current.play();
+          setIsPlaying(true);
+        } catch (error) {
+          console.error('Autoplay failed:', error);
+        }
+      }
+    };
 
-    // Initialize first video
-    if (primaryVideoRef.current) {
-      primaryVideoRef.current.src = videos[0].video_url;
-      primaryVideoRef.current.load();
+    preloadVideos();
+
+    // Set container background
+    if (containerRef.current) {
+      containerRef.current.style.backgroundColor = '#000';
     }
-  }, [videos]);
+  }, [videos, autoplay]);
 
-  const getCurrentVideo = () => {
-    return activeVideo === 'primary' ? primaryVideoRef.current : secondaryVideoRef.current;
-  };
-
-  const getInactiveVideo = () => {
-    return activeVideo === 'primary' ? secondaryVideoRef.current : primaryVideoRef.current;
-  };
-
-  const switchToNextVideo = async () => {
-    const nextIndex = (currentVideoIndex + 1) % videos.length;
-    const inactiveVideo = getInactiveVideo();
-    
-    // Prepare the inactive video
-    inactiveVideo.src = videos[nextIndex].video_url;
-    await inactiveVideo.load();
-    
-    // Start playing the next video slightly before switching
-    const playPromise = inactiveVideo.play();
-    if (playPromise) {
-      await playPromise.catch(() => {});
-    }
-
-    // Switch videos
-    setCurrentVideoIndex(nextIndex);
-    setActiveVideo(activeVideo === 'primary' ? 'secondary' : 'primary');
-  };
-
+  // Video event handlers
   useEffect(() => {
-    const currentVideo = getCurrentVideo();
-    const inactiveVideo = getInactiveVideo();
-    
+    const currentVideo = videoRefs.current[currentVideoIndex].current;
     if (!currentVideo) return;
 
+    // Set initial playback speed
+    currentVideo.playbackRate = playbackSpeed;
+
     const handleTimeUpdate = () => {
+      // Update progress
       const progress = (currentVideo.currentTime / currentVideo.duration) * 100;
       setProgress(progress);
 
-      // Preload next video when current video is 80% complete
-      if (progress > 80) {
+      // Preload next video earlier, at 30%
+      if (progress >= 30 && autoplay) {
         const nextIndex = (currentVideoIndex + 1) % videos.length;
-        inactiveVideo.src = videos[nextIndex].video_url;
-        inactiveVideo.load();
+        const nextVideo = videoRefs.current[nextIndex].current;
+        if (nextVideo && !nextVideo.src) {
+          nextVideo.src = videos[nextIndex].video_url;
+          nextVideo.style.backgroundColor = '#000';
+          nextVideo.load();
+        }
       }
     };
 
     const handleEnded = async () => {
-      if (currentVideoIndex < videos.length - 1 || autoplay) {
-        await switchToNextVideo();
+      // Only continue to next video if autoplay is enabled
+      if (autoplay) {
+        const nextIndex = (currentVideoIndex + 1) % videos.length;
+        const nextVideo = videoRefs.current[nextIndex].current;
+        
+        if (nextVideo) {
+          // Ensure next video is loaded and ready
+          if (!nextVideo.src) {
+            nextVideo.src = videos[nextIndex].video_url;
+            nextVideo.style.backgroundColor = '#000';
+            await nextVideo.load();
+          }
+          
+          // Wait for video to be ready
+          if (nextVideo.readyState < 3) {
+            await new Promise(resolve => {
+              nextVideo.addEventListener('canplay', resolve, { once: true });
+            });
+          }
+          
+          try {
+            // Start playing next video immediately
+            await nextVideo.play();
+            nextVideo.playbackRate = playbackSpeed; // Set playback speed for next video
+            setCurrentVideoIndex(nextIndex);
+            
+            // Preload next video in sequence
+            const preloadIndex = (nextIndex + 1) % videos.length;
+            const preloadVideo = videoRefs.current[preloadIndex].current;
+            if (preloadVideo && !preloadVideo.src) {
+              preloadVideo.src = videos[preloadIndex].video_url;
+              preloadVideo.style.backgroundColor = '#000';
+              preloadVideo.load();
+            }
+          } catch (error) {
+            console.error('Error playing next video:', error);
+          }
+        }
       } else {
+        // Stop playing when current video ends if autoplay is disabled
         setIsPlaying(false);
       }
     };
 
-    const handlePlay = () => setIsPlaying(true);
-    const handlePause = () => setIsPlaying(false);
-
     currentVideo.addEventListener('timeupdate', handleTimeUpdate);
     currentVideo.addEventListener('ended', handleEnded);
-    currentVideo.addEventListener('play', handlePlay);
-    currentVideo.addEventListener('pause', handlePause);
 
     return () => {
       currentVideo.removeEventListener('timeupdate', handleTimeUpdate);
       currentVideo.removeEventListener('ended', handleEnded);
-      currentVideo.removeEventListener('play', handlePlay);
-      currentVideo.removeEventListener('pause', handlePause);
-      if (transitionTimeoutRef.current) {
-        clearTimeout(transitionTimeoutRef.current);
-      }
     };
-  }, [currentVideoIndex, videos.length, autoplay, activeVideo]);
+  }, [currentVideoIndex, videos.length, autoplay, playbackSpeed]);
 
-  useEffect(() => {
-    const currentVideo = getCurrentVideo();
+  // Playback control functions
+  const handlePlayPause = async () => {
+    const currentVideo = videoRefs.current[currentVideoIndex].current;
     if (!currentVideo) return;
 
-    if (autoplay && isPlaying) {
-      const playPromise = currentVideo.play();
-      if (playPromise) {
-        playPromise.catch(() => {});
-      }
-    }
-  }, [currentVideoIndex, autoplay, isPlaying, activeVideo]);
-
-  const handlePlayPause = () => {
-    const currentVideo = getCurrentVideo();
-    if (currentVideo) {
+    try {
       if (isPlaying) {
         currentVideo.pause();
       } else {
-        currentVideo.play();
+        await currentVideo.play();
       }
       setIsPlaying(!isPlaying);
+    } catch (error) {
+      console.error('Play/Pause error:', error);
+    }
+  };
+
+  const handleNext = async () => {
+    const nextIndex = (currentVideoIndex + 1) % videos.length;
+    const nextVideo = videoRefs.current[nextIndex].current;
+    
+    if (nextVideo) {
+      if (!nextVideo.src) {
+        nextVideo.src = videos[nextIndex].video_url;
+        nextVideo.style.backgroundColor = '#000';
+        await nextVideo.load();
+      }
+
+      // Wait for video to be ready
+      if (nextVideo.readyState < 3) {
+        await new Promise(resolve => {
+          nextVideo.addEventListener('canplay', resolve, { once: true });
+        });
+      }
+      
+      try {
+        await nextVideo.play();
+        nextVideo.playbackRate = playbackSpeed; // Set playback speed for next video
+        setCurrentVideoIndex(nextIndex);
+        setIsPlaying(true);
+      } catch (error) {
+        console.error('Error playing next video:', error);
+      }
     }
   };
 
   const handlePrevious = async () => {
     const prevIndex = currentVideoIndex > 0 ? currentVideoIndex - 1 : videos.length - 1;
-    const inactiveVideo = getInactiveVideo();
+    const prevVideo = videoRefs.current[prevIndex].current;
     
-    inactiveVideo.src = videos[prevIndex].video_url;
-    await inactiveVideo.load();
-    
-    const playPromise = inactiveVideo.play();
-    if (playPromise) {
-      await playPromise.catch(() => {});
+    if (prevVideo) {
+      if (!prevVideo.src) {
+        prevVideo.src = videos[prevIndex].video_url;
+        prevVideo.style.backgroundColor = '#000';
+        await prevVideo.load();
+      }
+
+      // Wait for video to be ready
+      if (prevVideo.readyState < 3) {
+        await new Promise(resolve => {
+          prevVideo.addEventListener('canplay', resolve, { once: true });
+        });
+      }
+      
+      try {
+        await prevVideo.play();
+        prevVideo.playbackRate = playbackSpeed; // Set playback speed for previous video
+        setCurrentVideoIndex(prevIndex);
+        setIsPlaying(true);
+      } catch (error) {
+        console.error('Error playing previous video:', error);
+      }
     }
-
-    setCurrentVideoIndex(prevIndex);
-    setActiveVideo(activeVideo === 'primary' ? 'secondary' : 'primary');
   };
-
-  const handleNext = async () => {
-    await switchToNextVideo();
-  };
-
-  const toggleAutoplay = () => setAutoplay(!autoplay);
 
   return (
     <div className="max-w-[400px] mx-auto bg-white rounded-lg p-4 shadow-lg">
       <div className="relative w-full" style={{ paddingBottom: '133.33%' }}>
-        <div className="absolute inset-0">
-          <div className="relative w-full h-full">
-            <div className={`absolute inset-0 transition-opacity duration-300 ${activeVideo === 'primary' ? 'opacity-100' : 'opacity-0'}`}>
+        <div ref={containerRef} className="absolute inset-0 bg-black">
+          {/* Video pool */}
+          {videos.map((_, index) => (
+            <div
+              key={index}
+              className="absolute inset-0"
+              style={{
+                visibility: currentVideoIndex === index ? 'visible' : 'hidden',
+                backgroundColor: '#000'
+              }}
+            >
               <video
-                ref={primaryVideoRef}
+                ref={videoRefs.current[index]}
                 className="rounded-lg w-full h-full object-contain bg-black"
                 playsInline
+                muted
                 preload="auto"
-              >
-                <source type="video/mp4" />
-              </video>
+              />
             </div>
-            <div className={`absolute inset-0 transition-opacity duration-300 ${activeVideo === 'secondary' ? 'opacity-100' : 'opacity-0'}`}>
-              <video
-                ref={secondaryVideoRef}
-                className="rounded-lg w-full h-full object-contain bg-black"
-                playsInline
-                preload="auto"
-              >
-                <source type="video/mp4" />
-              </video>
-            </div>
-          </div>
+          ))}
           
+          {/* Progress bar */}
           <div className="absolute bottom-0 left-0 right-0 bg-gray-200 h-1">
             <div 
-              className="bg-indigo-600 h-1 transition-all duration-300"
+              className="bg-indigo-600 h-1"
               style={{ width: `${progress}%` }}
             />
           </div>
         </div>
       </div>
 
+      {/* Control buttons */}
       <div className="mt-4 space-y-4">
         <div className="flex items-center justify-between">
           <button
-            onClick={toggleAutoplay}
+            onClick={() => setAutoplay(!autoplay)}
             className={`flex items-center space-x-1 px-3 py-1.5 rounded-full ${
               autoplay ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'
             }`}
@@ -200,17 +253,40 @@ const VideoPlaylist = ({ videos }) => {
           </span>
         </div>
 
+        {/* Speed control buttons */}
+        <div className="flex items-center justify-center space-x-2">
+          {[0.1, 0.2, 0.5, 1].map((speed) => (
+            <button
+              key={speed}
+              onClick={() => {
+                setPlaybackSpeed(speed);
+                const currentVideo = videoRefs.current[currentVideoIndex].current;
+                if (currentVideo) {
+                  currentVideo.playbackRate = speed;
+                }
+              }}
+              className={`px-2 py-1 text-xs rounded ${
+                playbackSpeed === speed
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {speed}x
+            </button>
+          ))}
+        </div>
+
         <div className="flex items-center justify-between px-4">
           <button 
             onClick={handlePrevious}
-            className="p-2 hover:text-indigo-600 transition-colors duration-200 touch-manipulation"
+            className="p-2 hover:text-indigo-600 transition-colors duration-200"
           >
             <SkipBack className="w-8 h-8 md:w-6 md:h-6" />
           </button>
           
           <button 
             onClick={handlePlayPause}
-            className="p-2 hover:text-indigo-600 transition-colors duration-200 touch-manipulation"
+            className="p-2 hover:text-indigo-600 transition-colors duration-200"
           >
             {isPlaying ? 
               <PauseCircle className="w-12 h-12 md:w-8 md:h-8" /> : 
@@ -220,7 +296,7 @@ const VideoPlaylist = ({ videos }) => {
           
           <button 
             onClick={handleNext}
-            className="p-2 hover:text-indigo-600 transition-colors duration-200 touch-manipulation"
+            className="p-2 hover:text-indigo-600 transition-colors duration-200"
           >
             <SkipForward className="w-8 h-8 md:w-6 md:h-6" />
           </button>
@@ -228,7 +304,7 @@ const VideoPlaylist = ({ videos }) => {
 
         <div className="flex items-center justify-between text-sm text-gray-500 px-2">
           <Volume2 className="w-4 h-4" />
-          <p className="ml-2 truncate">{videos[currentVideoIndex]?.gloss}</p>
+          <p className="ml-2 truncate">{originalText}</p>
         </div>
       </div>
     </div>
@@ -285,14 +361,16 @@ export function ResultDisplay({ result }) {
     );
   }
 
+  const originalText = glossResponse?.original_text || originalInput?.text;
+
   return (
     <div className="space-y-4 max-w-full mx-auto">
-      {(glossResponse?.original_text || originalInput?.text || originalInput?.audio_path) && (
+      {(originalText || originalInput?.audio_path) && (
         <ResultCard title="Original Input" indicator="indigo">
           <div>
-            {(glossResponse?.original_text || originalInput?.text) && (
+            {originalText && (
               <p className="text-gray-700 break-words">
-                {glossResponse?.original_text || originalInput?.text}
+                {originalText}
               </p>
             )}
             
@@ -303,37 +381,15 @@ export function ResultDisplay({ result }) {
         </ResultCard>
       )}
 
-      {glossResponse && (
-        <ResultCard title="ASL Gloss Conversion" indicator="purple">
-          <div className="space-y-2">
-            <p className="text-lg font-medium text-gray-900 break-words">
-              {glossResponse.gloss}
-            </p>
-            {glossResponse.word_count > 0 && (
-              <p className="text-sm text-gray-500">
-                Word count: {glossResponse.word_count}
-              </p>
-            )}
-            {glossResponse.skipped_words?.length > 0 && (
-              <div className="text-sm text-yellow-600">
-                <p>Skipped words:</p>
-                <ul className="list-disc list-inside">
-                  {glossResponse.skipped_words.map((word, idx) => (
-                    <li key={idx} className="truncate">{word}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-        </ResultCard>
-      )}
-
       {videoResponse?.video_mappings && videoResponse.video_mappings.length > 0 && (
         <ResultCard 
           title={`Sign Language Videos (${videoResponse.total_clips} signs)`} 
           indicator="green"
         >
-          <VideoPlaylist videos={videoResponse.video_mappings} />
+          <VideoPlaylist 
+            videos={videoResponse.video_mappings} 
+            originalText={originalText}
+          />
         </ResultCard>
       )}
 
