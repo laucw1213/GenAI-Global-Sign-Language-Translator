@@ -1,7 +1,7 @@
 // TextInput.js
 import React, { useState, useCallback } from 'react';
 import { AlertCircle } from 'lucide-react';
-import { processContent, getSupportedLanguages } from './apiServices';
+import { processContent } from './apiServices';
 
 export function TextInput({ onSubmit, disabled }) {
   const [text, setText] = useState("");
@@ -37,17 +37,13 @@ export function TextInput({ onSubmit, disabled }) {
         </div>
       )}
       
-      <div className="text-sm text-gray-600 bg-gray-50 p-4 rounded-lg">
-        Supported languages: {getSupportedLanguages().join(', ')}
-      </div>
-      
       <form onSubmit={handleSubmit} className="space-y-4">
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
           disabled={disabled || isProcessing}
           className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100"
-          placeholder="Please enter text (supports multiple languages)..."
+          placeholder="Please enter text..."
           rows="4"
         />
         

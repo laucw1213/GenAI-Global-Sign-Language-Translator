@@ -27,54 +27,13 @@ const logger = {
   }
 };
 
-// Language detection patterns
-const workingLanguages = {
-  bn: /[\u0980-\u09FF]/,    // Bengali
-  es: /[áéíóúüñ¿¡]/i,       // Spanish
-  hi: /[\u0900-\u097F]/,    // Hindi
-  ja: /[\u3040-\u30FF\u31F0-\u31FF]/, // Japanese
-  pt: /[áéíóúãõàèìòùâêîôûç]/i, // Portuguese
-  ru: /[\u0400-\u04FF]/,    // Russian
-  tr: /[ğıİöüşç]/i,         // Turkish
-  vi: /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i, // Vietnamese
-  zh: /[\u4E00-\u9FFF]/,    // Chinese (Simplified)
-  'zh-Hant': /[\u4E00-\u9FFF]/ // Chinese (Traditional)
-};
-
 // Error classes
-class TranslationError extends Error {
-  constructor(message) {
-    super(message);
-    this.name = 'TranslationError';
-  }
-}
-
 class TranscriptionError extends Error {
   constructor(message) {
     super(message);
     this.name = 'TranscriptionError';
   }
 }
-
-// Language detection
-export const detectLanguage = (text) => {
-  logger.log('INFO', 'Detecting language');
-  
-  if (!text) {
-    logger.log('INFO', 'No text provided, defaulting to English');
-    return 'en';
-  }
-  
-  for (const [lang, pattern] of Object.entries(workingLanguages)) {
-    if (pattern.test(text)) {
-      logger.log('SUCCESS', 'Language detected', { Language: lang });
-      return lang;
-    }
-  }
-  
-  logger.log('INFO', 'No specific language detected, defaulting to English');
-  return 'en';
-};
 
 // Audio processing utilities
 const processAudioBlob = async (blob) => {
@@ -143,58 +102,6 @@ export const transcribeAudio = async (audioData) => {
     } catch (error) {
       logger.log('ERROR', 'Transcription failed', { Error: error.message });
       throw new TranscriptionError(error.message || 'Transcription failed');
-    }
-  });
-};
-
-// Translation service
-export const translateText = async (text) => {
-  logger.log('INFO', 'Starting translation process');
-
-  if (!text?.trim()) {
-    logger.log('ERROR', 'No text provided for translation');
-    throw new TranslationError('No text provided for translation');
-  }
-
-  if (!window.ai?.translator) {
-    logger.log('INFO', 'Translation service not available, returning original text');
-    return text;
-  }
-
-  return retryWithDelay(async () => {
-    let translator = null;
-    try {
-      const sourceLanguage = detectLanguage(text);
-      
-      logger.log('API', 'Translation Request:', {
-        Source: text,
-        'Detected Language': sourceLanguage
-      });
-
-      translator = await window.ai.translator.create({
-        sourceLanguage,
-        targetLanguage: "en"
-      });
-
-      if (!translator) {
-        throw new TranslationError('Failed to create translator instance');
-      }
-
-      const translatedText = await translator.translate(text.trim());
-      
-      logger.log('SUCCESS', 'Translation Complete:', {
-        Result: translatedText
-      });
-
-      return translatedText;
-    } catch (error) {
-      logger.log('ERROR', 'Translation failed', { Error: error.message });
-      throw new TranslationError(error.message || 'Translation failed');
-    } finally {
-      if (translator?.destroy) {
-        await translator.destroy();
-        logger.log('INFO', 'Translator instance destroyed');
-      }
     }
   });
 };
@@ -280,26 +187,21 @@ export const processContent = async (content, type = 'text') => {
     
     const result = await withCache(cacheKey, async () => {
       if (type === 'text') {
-        return translateText(content);
+        // Just return the text as is, translation will be handled by backend
+        return content;
       } else if (type === 'audio') {
-        // First get transcription from Whisper API
+        // Get transcription from Whisper API
         const transcriptionResult = await transcribeAudio(content);
         if (!transcriptionResult.success) {
           throw new Error('Transcription failed');
         }
         
-        logger.log('INFO', 'Transcription successful, proceeding to translation', {
+        logger.log('INFO', 'Transcription successful', {
           'Transcribed Text': transcriptionResult.text
         });
         
-        // Translate the transcribed text
-        const translatedText = await translateText(transcriptionResult.text);
-        
-        // Return in the format that workflow expects
-        return {
-          success: true,
-          text: translatedText  // Changed from returning {original, translated} to just the translated text
-        };
+        // Return transcribed text directly
+        return transcriptionResult.text;
       } else {
         throw new Error('Unsupported content type');
       }
@@ -311,12 +213,6 @@ export const processContent = async (content, type = 'text') => {
     logger.log('ERROR', 'Content processing failed', { Error: error.message });
     throw error;
   }
-};
-
-// Export available languages
-export const getSupportedLanguages = () => {
-  logger.log('INFO', 'Getting supported languages');
-  return Object.keys(workingLanguages);
 };
 
 export const debug = {

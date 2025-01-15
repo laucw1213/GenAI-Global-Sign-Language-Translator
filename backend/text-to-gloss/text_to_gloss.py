@@ -3,6 +3,7 @@ import json
 import google.generativeai as genai
 import os
 from google.cloud import firestore
+from google.cloud import translate
 from thefuzz import fuzz
 import logging
 import re
@@ -17,13 +18,23 @@ logger = logging.getLogger(__name__)
 class ASLGlossConverter:
     def __init__(self):
         try:
+            # Initialize Firestore client
             self.db = firestore.Client()
             self.available_glosses = self._load_available_glosses()
+
+            # Initialize Translation client
+            self.translate_client = translate.TranslationServiceClient()
+            self.project_id = "genasl"  # Your GCP project ID
+            self.location = "global"
+            self.parent = f"projects/{self.project_id}/locations/{self.location}"
+
+            # Initialize Gemini
             api_key = os.getenv('GEMINI_API_KEY')
             if not api_key:
                 raise ValueError("GEMINI_API_KEY not found in environment variables")
             genai.configure(api_key=api_key)
             self.model = genai.GenerativeModel('gemini-1.5-pro')
+            
             logger.info("ASLGlossConverter initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize ASLGlossConverter: {e}")
@@ -45,30 +56,79 @@ class ASLGlossConverter:
     def _clean_text(self, text):
         """Clean and normalize input text"""
         try:
-            # Remove extra spaces and normalize whitespace
             text = ' '.join(text.split())
-            # Remove special characters but keep basic punctuation
-            text = re.sub(r'[^a-zA-Z0-9\s\.,!?\u4e00-\u9fff]', '', text)
+            text = re.sub(r'[^a-zA-Z0-9\s\.,!?\u4e00-\u9fff\u3040-\u309F\u30A0-\u30FF]', '', text)
             return text.strip()
         except Exception as e:
             logger.error(f"Error cleaning text: {e}")
+            raise
+
+    def detect_language(self, text):
+        """Detect the language of the text"""
+        try:
+            logger.info(f"Detecting language for text: {text}")
+            
+            request = {
+                "parent": self.parent,
+                "content": text,
+                "mime_type": "text/plain"
+            }
+            
+            response = self.translate_client.detect_language(request=request)
+            detected_language = response.languages[0].language_code
+            
+            logger.info(f"Detected language: {detected_language}")
+            return detected_language
+            
+        except Exception as e:
+            logger.error(f"Language detection error: {e}")
+            raise
+
+    def translate_text(self, text):
+        """Translate text to English using Google Cloud Translation API"""
+        try:
+            logger.info(f"Starting translation for text: {text}")
+            
+            # Detect language
+            source_language = self.detect_language(text)
+            
+            # If already English, return as is
+            if source_language == 'en':
+                logger.info("Text is already in English")
+                return text
+
+            # Translate to English
+            request = {
+                "parent": self.parent,
+                "contents": [text],
+                "mime_type": "text/plain",
+                "source_language_code": source_language,
+                "target_language_code": "en"
+            }
+
+            response = self.translate_client.translate_text(request=request)
+            translated_text = response.translations[0].translated_text
+            
+            logger.info(f"Translation successful: {translated_text}")
+            return translated_text
+
+        except Exception as e:
+            logger.error(f"Translation error: {e}")
             raise
 
     def find_best_gloss_match(self, word):
         """Find best matching ASL gloss using fuzzy matching"""
         try:
             word = word.upper()
-            # Direct match
             if word in self.available_glosses:
                 return word
 
-            # Fuzzy match
             best_match = None
             highest_ratio = 0
             
             for gloss in self.available_glosses:
                 ratio = fuzz.ratio(word, gloss)
-                if ratio > highest_ratio and ratio > 80:  # 80% similarity threshold
+                if ratio > highest_ratio and ratio > 80:
                     highest_ratio = ratio
                     best_match = gloss
                     
@@ -84,18 +144,22 @@ class ASLGlossConverter:
             raise
 
     def convert_text_to_gloss(self, text):
-        """Convert English/Chinese text to ASL gloss"""
+        """Convert text to ASL gloss"""
         try:
             # Clean input text
             cleaned_text = self._clean_text(text)
             logger.info(f"Processing text: {cleaned_text}")
 
-            # Bilingual support prompt
+            # Translate text to English
+            english_text = self.translate_text(cleaned_text)
+            logger.info(f"Translated text: {english_text}")
+
+            # Build Gemini prompt
             prompt = f"""
-            Convert this English or Chinese text to ASL gloss notation.
+            Convert this English text to ASL gloss notation.
             Follow these rules strictly:
             1. Use ALL CAPITAL LETTERS
-            2. Keep important connecting words like AND/和/與, OR/或者, BUT/但是
+            2. Keep important connecting words like AND, OR, BUT
             3. Keep every content word (nouns, verbs, adjectives)
             4. Remove only articles (a, an, the) and unnecessary prepositions
             5. Keep words in original order
@@ -103,23 +167,22 @@ class ASLGlossConverter:
             7. Do not combine or merge words
             8. Each word should be separated by a single space
             9. No punctuation in the output
-            10. For Chinese input, translate to English ASL gloss first
 
-            English or Chinese text: {cleaned_text}
+            English text: {english_text}
 
             Return ONLY the ASL gloss words in CAPITALS, separated by spaces.
             Here are some examples:
 
             Example 1:
-            Input: "The government and education support the economic" or "政府和教育支持經濟"
+            Input: "The government and education support the economic"
             Output: GOVERNMENT AND EDUCATION SUPPORT ECONOMIC
 
             Example 2:
-            Input: "Republican and policy discuss economic" or "共和黨和政策討論經濟"
+            Input: "Republican and policy discuss economic"
             Output: REPUBLICAN AND POLICY DISCUSS ECONOMIC
 
             Now convert the following text to ASL gloss following the same pattern:
-            {cleaned_text}
+            {english_text}
             """
 
             # Call Gemini API
@@ -137,25 +200,26 @@ class ASLGlossConverter:
             raw_gloss = response.text.strip().upper()
             words = raw_gloss.split()
             
-            # Process each word
             final_words = []
             replacements = {}
             skipped_words = []
             
             for word in words:
-                # Clean word
+                logger.info(f"Processing word: {word}")
                 clean_word = ''.join(c for c in word if c.isalnum())
                 if not clean_word:
                     continue
 
                 if clean_word in self.available_glosses:
                     final_words.append(clean_word)
+                    logger.info(f"Word '{clean_word}' found in glosses")
                 else:
                     match = self.find_best_gloss_match(clean_word)
                     if match:
                         final_words.append(match)
                         if match != clean_word:
                             replacements[clean_word] = match
+                            logger.info(f"Word '{clean_word}' matched to '{match}'")
                     else:
                         skipped_words.append(clean_word)
                         logger.warning(f"Skipped word with no match: {clean_word}")
@@ -167,6 +231,7 @@ class ASLGlossConverter:
             result = {
                 'original_text': text,
                 'cleaned_text': cleaned_text,
+                'english_text': english_text,
                 'gloss': ' '.join(final_words),
                 'replacements': replacements,
                 'word_count': len(final_words),
