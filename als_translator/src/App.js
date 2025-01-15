@@ -61,6 +61,9 @@ function App() {
   }, [result]);
 
   const handleRecordingComplete = async (result) => {
+    // 清除旧的结果
+    setResult(null);
+    
     if (!result || (!result.text && !result.success)) {
       setError('Could not get transcription result');
       return;
@@ -87,6 +90,9 @@ function App() {
   };
   
   const processText = async (text) => {
+    // 清除旧的结果
+    setResult(null);
+    
     if (!token) {
       setError("Authentication required");
       return;
