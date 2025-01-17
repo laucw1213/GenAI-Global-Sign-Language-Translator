@@ -106,14 +106,14 @@ export function AudioRecorder({ onRecordingComplete, disabled }) {
           
           setProcessingStatus("Processing audio...");
           const result = await processContent(audioBlob, 'audio');
-          onRecordingComplete(result);
+          if (!result || !result.success) {
+            throw new Error(result?.error || 'Transcription failed');
+          }
+          onRecordingComplete(result.text);
           
         } catch (error) {
           console.error('Audio processing error:', error);
-          onRecordingComplete({ 
-            success: false, 
-            error: error.message || 'Audio processing error' 
-          });
+          throw error;
         
         } finally {
           setIsProcessing(false);

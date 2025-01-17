@@ -66,12 +66,11 @@ export function UploadFile({ onTranscriptionComplete, disabled }) {
       
       setUploadProgress(90);
       
-      if (result.success) {
-        onTranscriptionComplete(result.text);
-        setProcessingStatus("Processing complete!");
-      } else {
-        throw new Error(result.error || 'Transcription failed');
+      if (!result || !result.success) {
+        throw new Error(result?.error || 'Transcription failed');
       }
+      onTranscriptionComplete(result.text);
+      setProcessingStatus("Processing complete!");
       
       setUploadProgress(100);
       

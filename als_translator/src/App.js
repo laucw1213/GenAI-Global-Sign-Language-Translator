@@ -60,29 +60,17 @@ function App() {
     }
   }, [result]);
 
-  const handleRecordingComplete = async (result) => {
+  const handleRecordingComplete = async (text) => {
     // 清除旧的结果
     setResult(null);
     
-    if (!result || (!result.text && !result.success)) {
+    if (!text) {
       setError('Could not get transcription result');
       return;
     }
   
     try {
-      let text = '';
-      if (result.success && typeof result.text === 'object') {
-        text = JSON.stringify(result.text);
-      } else if (result.success) {
-        text = String(result.text).trim();
-      } else if (typeof result === 'object') {
-        text = result.text || JSON.stringify(result);
-      } else {
-        text = String(result).trim();
-      }
-  
-      const textForProcess = text.replace(/['"{}[\]]/g, '').trim();
-      await processText(textForProcess);
+      await processText(String(text).trim());
     } catch (error) {
       console.error('Processing recording error:', error);
       setError(error.message || 'Error processing recording result');
@@ -107,9 +95,12 @@ function App() {
       setLoading(true);
       setError(null);
       
+      // 确保text是字符串
+      const textToProcess = typeof text === 'object' ? JSON.stringify(text) : String(text).trim();
+      
       const requestBody = {
         argument: JSON.stringify({ 
-          text: text.trim()
+          text: textToProcess
         }),
         callLogLevel: "CALL_LOG_LEVEL_UNSPECIFIED"
       };
