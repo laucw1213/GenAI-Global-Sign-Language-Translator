@@ -33,9 +33,20 @@ class ASLGlossConverter:
             if not api_key:
                 raise ValueError("GEMINI_API_KEY not found in environment variables")
             genai.configure(api_key=api_key)
-            self.model = genai.GenerativeModel('gemini-1.5-pro')
             
-            logger.info("ASLGlossConverter initialized successfully")
+            # Configure Gemini 2.0 Flash with optimized settings
+            self.model = genai.GenerativeModel(
+                model_name="gemini-2.0-flash-exp",
+                generation_config={
+                    "temperature": 0.1,     # 保持低温度确保稳定性
+                    "top_p": 0.8,         # 降低以加快决策
+                    "top_k": 20,         # 减少候选数量
+                    "max_output_tokens": 100,  # 限制输出长度，因为我们只需要简短回复
+                    "candidate_count": 1  # 只生成一个候选答案
+                }
+            )
+            
+            logger.info("ASLGlossConverter initialized successfully with Gemini 2.0 Flash")
         except Exception as e:
             logger.error(f"Failed to initialize ASLGlossConverter: {e}")
             raise
@@ -154,47 +165,26 @@ class ASLGlossConverter:
             english_text = self.translate_text(cleaned_text)
             logger.info(f"Translated text: {english_text}")
 
-            # Build Gemini prompt
-            prompt = f"""
-            Convert this English text to ASL gloss notation.
-            Follow these rules strictly:
-            1. Use ALL CAPITAL LETTERS
-            2. Keep important connecting words like AND, OR, BUT
-            3. Keep every content word (nouns, verbs, adjectives)
-            4. Remove only articles (a, an, the) and unnecessary prepositions
-            5. Keep words in original order
-            6. Do not add any extra words
-            7. Do not combine or merge words
-            8. Each word should be separated by a single space
-            9. No punctuation in the output
+            # Build optimized Gemini prompt
+            prompt = f"""Convert to ASL gloss notation. Rules:
+1. ALL CAPS
+2. Keep: nouns, verbs, adjectives, AND/OR/BUT
+3. Remove: a/an/the, unnecessary prepositions
+4. Original word order
+5. Space between words
+6. No punctuation
 
-            English text: {english_text}
+Text: {english_text}
 
-            Return ONLY the ASL gloss words in CAPITALS, separated by spaces.
-            Here are some examples:
+Return ONLY gloss words."""
 
-            Example 1:
-            Input: "The government and education support the economic"
-            Output: GOVERNMENT AND EDUCATION SUPPORT ECONOMIC
-
-            Example 2:
-            Input: "Republican and policy discuss economic"
-            Output: REPUBLICAN AND POLICY DISCUSS ECONOMIC
-
-            Now convert the following text to ASL gloss following the same pattern:
-            {english_text}
-            """
 
             # Call Gemini API
-            response = self.model.generate_content(
-                prompt,
-                generation_config={
-                    'temperature': 0.1,
-                    'top_p': 0.9,
-                    'top_k': 40,
-                    'max_output_tokens': 100,
-                }
-            )
+            try:
+                response = self.model.generate_content(prompt)
+            except Exception as e:
+                logger.error(f"Gemini API error: {e}")
+                raise
 
             # Clean and process response
             raw_gloss = response.text.strip().upper()
