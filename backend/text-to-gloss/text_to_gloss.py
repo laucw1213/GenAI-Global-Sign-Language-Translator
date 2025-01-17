@@ -7,6 +7,7 @@ from google.cloud import translate
 from thefuzz import fuzz
 import logging
 import re
+from datetime import datetime, timedelta
 
 # Configure logging
 logging.basicConfig(
@@ -15,12 +16,97 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+class GlossCache:
+    _instance = None
+    _cache = set()
+    _last_update = None
+    _db = None
+    _update_interval = timedelta(hours=24)
+    _error_count = 0
+    _max_errors = 3
+    
+    def __init__(self):
+        if not GlossCache._db:
+            GlossCache._db = firestore.Client()
+        self._backup_cache = set()  # 备份缓存
+    
+    @classmethod
+    def get_instance(cls):
+        if cls._instance is None:
+            cls._instance = cls()
+            cls._instance._load_cache()
+        return cls._instance
+    
+    def _load_cache(self):
+        """Load glosses into cache with error handling and backup"""
+        try:
+            # 尝试加载新数据
+            docs = self._db.collection('asl_mappings').stream()
+            new_cache = {doc.id for doc in docs}
+            
+            # 验证新数据
+            if len(new_cache) < 100:  # 基本验证
+                raise ValueError("Suspiciously small number of glosses loaded")
+                
+            # 更新成功，重置错误计数
+            self._backup_cache = self._cache  # 备份当前缓存
+            self._cache = new_cache
+            self._last_update = datetime.now()
+            self._error_count = 0
+            
+            logger.info(f"Cache successfully loaded with {len(self._cache)} glosses")
+            
+        except Exception as e:
+            self._error_count += 1
+            logger.error(f"Error loading cache (attempt {self._error_count}): {e}")
+            
+            if self._backup_cache and self._error_count <= self._max_errors:
+                logger.info("Using backup cache")
+                self._cache = self._backup_cache
+            else:
+                raise
+    
+    def _needs_update(self):
+        """Check if cache needs updating with adaptive interval"""
+        if not self._last_update:
+            return True
+            
+        time_since_update = datetime.now() - self._last_update
+        
+        # 根据错误次数调整更新间隔
+        if self._error_count > 0:
+            adjusted_interval = self._update_interval * (1 + self._error_count)
+            return time_since_update > adjusted_interval
+            
+        return time_since_update > self._update_interval
+    
+    def get_glosses(self):
+        """Get cached glosses with performance logging"""
+        try:
+            start_time = datetime.now()
+            
+            if self._needs_update():
+                self._load_cache()
+                
+            end_time = datetime.now()
+            duration = (end_time - start_time).total_seconds()
+            logger.info(f"Cache access completed in {duration:.3f} seconds")
+            
+            return self._cache
+            
+        except Exception as e:
+            logger.error(f"Error accessing cache: {e}")
+            if self._backup_cache:
+                logger.info("Falling back to backup cache")
+                return self._backup_cache
+            raise
+
 class ASLGlossConverter:
     def __init__(self):
         try:
-            # Initialize Firestore client
-            self.db = firestore.Client()
-            self.available_glosses = self._load_available_glosses()
+            # Use cached glosses
+            self.gloss_cache = GlossCache.get_instance()
+            self.available_glosses = self.gloss_cache.get_glosses()
 
             # Initialize Translation client
             self.translate_client = translate.TranslationServiceClient()
@@ -52,17 +138,8 @@ class ASLGlossConverter:
             raise
 
     def _load_available_glosses(self):
-        """Load available ASL glosses from Firestore"""
-        try:
-            glosses = set()
-            docs = self.db.collection('asl_mappings').stream()
-            for doc in docs:
-                glosses.add(doc.id)
-            logger.info(f"Loaded {len(glosses)} glosses from Firestore")
-            return glosses
-        except Exception as e:
-            logger.error(f"Error loading glosses from Firestore: {e}")
-            raise
+        """Get glosses from cache"""
+        return self.gloss_cache.get_glosses()
 
     def _clean_text(self, text):
         """Clean and normalize input text"""
