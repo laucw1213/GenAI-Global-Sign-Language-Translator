@@ -31,24 +31,24 @@ Visit our website: [ASL Translator](https://storage.googleapis.com/asl-translato
 
 ### Architecture Overview
 1. **Frontend Layer**
-   - Chrome browser access
-   - Text, voice, and audio file input support
-   - React.js-based responsive interface
+    - Chrome browser access
+    - Text, voice, and audio file input support
+    - React.js-based responsive interface
 
 2. **Speech Processing Layer**
-   - OpenAI Whisper via Hugging Face
-   - Multiple voice input format support
+    - OpenAI Whisper via Hugging Face
+    - Multiple voice input format support
 
 3. **Core Processing Layer**
-   - Text-to-Gloss Function:
-     * Language detection and translation
-     * Sign language generation
-   - Gloss-to-Video Function:
-     * Video mapping and URL generation
+    - Text-to-Gloss Function:
+        * Language detection and translation
+        * Sign language generation
+    - Gloss-to-Video Function:
+        * Video mapping and URL generation
 
 4. **Data Storage Layer**
-   - Firestore: Sign language mapping storage
-   - Cloud Storage: Video file storage
+    - Firestore: Sign language mapping storage
+    - Cloud Storage: Video file storage
 
 ## Core Features
 
@@ -73,24 +73,24 @@ Visit our website: [ASL Translator](https://storage.googleapis.com/asl-translato
 
 ### Process Flow
 1. **Input Processing**
-   - User input handling
-   - Voice-to-text conversion
+    - User input handling
+    - Voice-to-text conversion
 
 2. **Language Processing**
-   - Language detection
-   - English conversion
+    - Language detection
+    - English conversion
 
 3. **Sign Language Generation**
-   - AI-based symbol generation
-   - Expression optimization
+    - AI-based symbol generation
+    - Expression optimization
 
 4. **Video Matching**
-   - Database query
-   - URL generation
+    - Database query
+    - URL generation
 
 5. **Result Display**
-   - Video combination
-   - Interface controls
+    - Video combination
+    - Interface controls
 
 ## Technical Implementation
 
@@ -101,16 +101,73 @@ Visit our website: [ASL Translator](https://storage.googleapis.com/asl-translato
 - **Data Storage**: Google Cloud Platform
 - **Frontend**: React.js
 
+### AI Model Application
+#### Gemini 2.0 Flash AI Working Process
+1. **Natural Language Understanding**
+    - Semantic structure analysis
+    - Context comprehension
+    - Linguistic pattern recognition
+
+2. **Sign Language Generation**
+    - Semantic decomposition into basic units
+    - Sign symbol mapping and selection
+    - Grammar structure optimization
+    - Expression sequence arrangement
+
+3. **Quality Enhancement**
+    - Context-aware refinement
+    - Cultural adaptation
+    - Expression naturality verification
+
+### Video Generation Process
+#### Video Mapping Algorithm
+1. **Symbol Analysis**
+    - Parse sign language symbol sequence
+    - Identify compound expressions
+    - Determine temporal relationships
+
+2. **Video Matching**
+    - Exact matching with standard sign videos
+    - Combination strategy for complex expressions
+    - Smooth transition optimization
+
+3. **Performance Optimization**
+    - Local caching of frequent segments
+    - Context-based preloading
+    - Streaming optimization
+
+### Database Design
+#### Firestore Data Structure
+**asl_mappings Collection**
+```json
+{
+    "category": "general",
+    "created_at": "2024-11-17T19:33:10.873Z",
+    "gloss": "TEST",
+    "metadata": {
+        "format": "video/mp4"
+    },
+    "video_info": {
+        "content_type": "video/mp4",
+        "created": "2024-11-08T13:18:52.410Z",
+        "public_url": "https://storage.googleapis.com/genasl-video-files/TEST.mp4",
+        "size": 243262,
+        "updated": "2024-11-08T13:18:52.410Z"
+    },
+    "video_path": "TEST.mp4"
+}
+```
+
 ### Service Components
 1. **Text-to-Gloss Service**
-   - Language processing
-   - Sign generation
-   - Error handling
+    - Language processing
+    - Sign generation
+    - Error handling
 
 2. **Gloss-to-Video Service**
-   - Video management
-   - Access optimization
-   - URL handling
+    - Video management
+    - Access optimization
+    - URL handling
 
 ## Vision
 
@@ -126,7 +183,7 @@ This project is not just a technical solution but a social innovation initiative
 # 基於生成式AI的全球手語翻譯器 (繁體中文)
 
 ## 目錄
-- [項目簡介](#項目簡介-1)
+- [項目簡介](#項目簡介)
 - [立即體驗](#立即體驗)
 - [系統架構](#系統架構)
 - [核心功能](#核心功能)
@@ -150,24 +207,24 @@ This project is not just a technical solution but a social innovation initiative
 
 ### 架構說明
 1. **用戶界面層**
-   - Chrome瀏覽器訪問
-   - 支持文本、語音和音頻輸入
-   - 基於React.js的響應式界面
+    - Chrome瀏覽器訪問
+    - 支持文本、語音和音頻輸入
+    - 基於'React.js'的響應式界面
 
 2. **語音處理層**
-   - OpenAI Whisper處理
-   - 多種語音格式支持
+    - OpenAI Whisper處理
+    - 多種語音格式支持
 
 3. **核心處理層**
-   - 文本轉手語功能：
-     * 語言檢測和翻譯
-     * 手語符號生成
-   - 手語轉視頻功能：
-     * 視頻映射和URL生成
+    - 文本轉手語功能：
+        * 語言檢測和翻譯
+        * 手語符號生成
+    - 手語轉視頻功能：
+        * 視頻映射和URL生成
 
 4. **數據存儲層**
-   - Firestore：手語映射存儲
-   - Cloud Storage：視頻文件存儲
+    - Firestore：手語映射存儲
+    - Cloud Storage：視頻文件存儲
 
 ## 核心功能
 
@@ -192,24 +249,24 @@ This project is not just a technical solution but a social innovation initiative
 
 ### 處理流程
 1. **輸入處理**
-   - 用戶輸入處理
-   - 語音轉文本
+    - 用戶輸入處理
+    - 語音轉文本
 
 2. **語言處理**
-   - 語言檢測
-   - 英語轉換
+    - 語言檢測
+    - 英語轉換
 
 3. **手語生成**
-   - AI符號生成
-   - 表達優化
+    - AI符號生成
+    - 表達優化
 
 4. **視頻匹配**
-   - 數據庫查詢
-   - URL生成
+    - 數據庫查詢
+    - URL生成
 
 5. **結果展示**
-   - 視頻組合
-   - 界面控制
+    - 視頻組合
+    - 界面控制
 
 ## 技術實現
 
@@ -220,16 +277,73 @@ This project is not just a technical solution but a social innovation initiative
 - **數據存儲**：Google Cloud Platform
 - **前端框架**：React.js
 
+### AI模型應用
+#### Gemini 2.0 Flash AI 工作流程
+1. **自然語言理解**
+    - 語義結構分析
+    - 上下文理解
+    - 語言模式識別
+
+2. **手語生成**
+    - 語義單元分解
+    - 手語符號映射與選擇
+    - 語法結構優化
+    - 表達序列編排
+
+3. **質量提升**
+    - 上下文相關性優化
+    - 文化適應性調整
+    - 表達自然度驗證
+
+### 視頻生成流程
+#### 視頻映射算法
+1. **符號分析**
+    - 解析手語符號序列
+    - 識別複合表達
+    - 確定時序關係
+
+2. **視頻匹配**
+    - 標準手語視頻精確匹配
+    - 複雜表達組合策略
+    - 平滑過渡優化
+
+3. **性能優化**
+    - 常用片段本地緩存
+    - 基於上下文的預加載
+    - 流式傳輸優化
+
+### 數據庫設計
+#### Firestore 數據結構
+**asl_mappings 集合**
+```json
+{
+    "category": "general",                              // 手語類別
+    "created_at": "2024-11-17T19:33:10.873Z",         // 創建時間
+    "gloss": "TEST",                                    // 手語符號
+    "metadata": {
+        "format": "video/mp4"                          // 視頻格式
+    },
+    "video_info": {
+        "content_type": "video/mp4",                   // 內容類型
+        "created": "2024-11-08T13:18:52.410Z",        // 視頻創建時間
+        "public_url": "https://storage.googleapis.com/genasl-video-files/TEST.mp4", // 視頻URL
+        "size": 243262,                                // 文件大小
+        "updated": "2024-11-08T13:18:52.410Z"         // 更新時間
+    },
+    "video_path": "TEST.mp4"                           // 視頻路徑
+}
+```
+
 ### 服務組件
 1. **文本轉手語服務**
-   - 語言處理
-   - 符號生成
-   - 錯誤處理
+    - 語言處理
+    - 符號生成
+    - 錯誤處理
 
 2. **手語轉視頻服務**
-   - 視頻管理
-   - 訪問優化
-   - URL處理
+    - 視頻管理
+    - 訪問優化
+    - URL處理
 
 ## 項目願景
 
