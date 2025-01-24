@@ -1,3 +1,22 @@
+"""
+ASL Sign Language Translation Service
+
+This module provides functionality to convert text into ASL (American Sign Language) gloss notation.
+Supports multi-language input using Google Cloud services and Gemini AI for processing.
+
+Key Features:
+- Multi-language input support
+- Intelligent gloss matching
+- Cache system for performance optimization
+- Error recovery mechanisms
+
+Flow:
+1. Text cleaning and normalization
+2. Language detection and translation
+3. ASL gloss generation using Gemini AI
+4. Gloss validation and matching
+"""
+
 import functions_framework
 import json
 import google.generativeai as genai
@@ -17,6 +36,12 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 class GlossCache:
+    """
+    Gloss notation cache manager
+    
+    A singleton cache system for managing and storing ASL gloss notations.
+    Implements cache backup and error recovery mechanisms.
+    """
     _instance = None
     _cache = set()
     _last_update = None
@@ -26,30 +51,32 @@ class GlossCache:
     _max_errors = 3
     
     def __init__(self):
+        """Initialize cache manager"""
         if not GlossCache._db:
             GlossCache._db = firestore.Client()
-        self._backup_cache = set()  # 备份缓存
+        self._backup_cache = set()  # Backup cache
     
     @classmethod
     def get_instance(cls):
+        """Get cache instance"""
         if cls._instance is None:
             cls._instance = cls()
             cls._instance._load_cache()
         return cls._instance
     
     def _load_cache(self):
-        """Load glosses into cache with error handling and backup"""
+        """Load glosses into cache with backup"""
         try:
-            # 尝试加载新数据
+            # Load new data
             docs = self._db.collection('asl_mappings').stream()
             new_cache = {doc.id for doc in docs}
             
-            # 验证新数据
-            if len(new_cache) < 100:  # 基本验证
+            # Validate new data
+            if len(new_cache) < 100:  # Basic validation
                 raise ValueError("Suspiciously small number of glosses loaded")
                 
-            # 更新成功，重置错误计数
-            self._backup_cache = self._cache  # 备份当前缓存
+            # Update successful, reset error count
+            self._backup_cache = self._cache  # Backup current cache
             self._cache = new_cache
             self._last_update = datetime.now()
             self._error_count = 0
@@ -73,7 +100,7 @@ class GlossCache:
             
         time_since_update = datetime.now() - self._last_update
         
-        # 根据错误次数调整更新间隔
+        # Adjust interval based on error count
         if self._error_count > 0:
             adjusted_interval = self._update_interval * (1 + self._error_count)
             return time_since_update > adjusted_interval
@@ -102,6 +129,7 @@ class GlossCache:
             raise
 
 class ASLGlossConverter:
+    """ASL Gloss Converter"""
     def __init__(self):
         try:
             # Use cached glosses
@@ -124,11 +152,11 @@ class ASLGlossConverter:
             self.model = genai.GenerativeModel(
                 model_name="gemini-2.0-flash-exp",
                 generation_config={
-                    "temperature": 0.1,     # 保持低温度确保稳定性
-                    "top_p": 0.8,         # 降低以加快决策
-                    "top_k": 20,         # 减少候选数量
-                    "max_output_tokens": 100,  # 限制输出长度，因为我们只需要简短回复
-                    "candidate_count": 1  # 只生成一个候选答案
+                    "temperature": 0.1,     # Low temperature for consistency
+                    "top_p": 0.8,           # Reduced for faster decisions
+                    "top_k": 20,            # Reduced candidates
+                    "max_output_tokens": 100,  # Limited output length
+                    "candidate_count": 1     # Single response
                 }
             )
             
@@ -136,10 +164,6 @@ class ASLGlossConverter:
         except Exception as e:
             logger.error(f"Failed to initialize ASLGlossConverter: {e}")
             raise
-
-    def _load_available_glosses(self):
-        """Get glosses from cache"""
-        return self.gloss_cache.get_glosses()
 
     def _clean_text(self, text):
         """Clean and normalize input text"""
@@ -232,7 +256,7 @@ class ASLGlossConverter:
             raise
 
     def convert_text_to_gloss(self, text):
-        """Convert text to ASL gloss"""
+        """Convert text to ASL gloss notation"""
         try:
             # Clean input text
             cleaned_text = self._clean_text(text)
@@ -254,7 +278,6 @@ class ASLGlossConverter:
 Text: {english_text}
 
 Return ONLY gloss words."""
-
 
             # Call Gemini API
             try:
