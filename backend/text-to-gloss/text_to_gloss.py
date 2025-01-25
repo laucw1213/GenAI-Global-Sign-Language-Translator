@@ -1,19 +1,19 @@
 """
-ASL Sign Language Translation Service
+ASL Text to Gloss Translation Service
 
-This module provides functionality to convert text into ASL (American Sign Language) gloss notation.
-Supports multi-language input using Google Cloud services and Gemini AI for processing.
+This module provides functionality to convert text into ASL (American Sign Language) gloss notation. 
+It supports multi-language input and uses Google Cloud services and Gemini AI for processing.
 
 Key Features:
-- Multi-language input support
+- Multi-language support
 - Intelligent gloss matching
-- Cache system for performance optimization
-- Error recovery mechanisms
+- Fast in-memory cache
+- Error handling and logging
 
 Flow:
 1. Text cleaning and normalization
 2. Language detection and translation
-3. ASL gloss generation using Gemini AI
+3. Gloss generation using Gemini AI
 4. Gloss validation and matching
 """
 
@@ -29,108 +29,73 @@ import re
 from datetime import datetime, timedelta
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class GlossCache:
-    """
-    Gloss notation cache manager
+    """Lightweight gloss validation cache manager"""
     
-    A singleton cache system for managing and storing ASL gloss notations.
-    Implements cache backup and error recovery mechanisms.
-    """
     _instance = None
     _cache = set()
-    _last_update = None
+    _initialized = False
     _db = None
-    _update_interval = timedelta(hours=24)
-    _error_count = 0
-    _max_errors = 3
     
     def __init__(self):
-        """Initialize cache manager"""
+        """Initialize cache manager with Firestore connection"""
         if not GlossCache._db:
             GlossCache._db = firestore.Client()
-        self._backup_cache = set()  # Backup cache
+            logger.info("Firestore client initialized")
     
     @classmethod
     def get_instance(cls):
-        """Get cache instance"""
+        """Get cache singleton instance"""
         if cls._instance is None:
             cls._instance = cls()
-            cls._instance._load_cache()
+            if not cls._initialized:
+                cls._instance._init_cache()
         return cls._instance
     
-    def _load_cache(self):
-        """Load glosses into cache with backup"""
-        try:
-            # Load new data
-            docs = self._db.collection('asl_mappings').stream()
-            new_cache = {doc.id for doc in docs}
+    def _init_cache(self):
+        """One-time initialization of cache"""
+        if self._initialized:
+            return
             
-            # Validate new data
-            if len(new_cache) < 100:  # Basic validation
-                raise ValueError("Suspiciously small number of glosses loaded")
-                
-            # Update successful, reset error count
-            self._backup_cache = self._cache  # Backup current cache
-            self._cache = new_cache
-            self._last_update = datetime.now()
-            self._error_count = 0
-            
-            logger.info(f"Cache successfully loaded with {len(self._cache)} glosses")
-            
-        except Exception as e:
-            self._error_count += 1
-            logger.error(f"Error loading cache (attempt {self._error_count}): {e}")
-            
-            if self._backup_cache and self._error_count <= self._max_errors:
-                logger.info("Using backup cache")
-                self._cache = self._backup_cache
-            else:
-                raise
-    
-    def _needs_update(self):
-        """Check if cache needs updating with adaptive interval"""
-        if not self._last_update:
-            return True
-            
-        time_since_update = datetime.now() - self._last_update
-        
-        # Adjust interval based on error count
-        if self._error_count > 0:
-            adjusted_interval = self._update_interval * (1 + self._error_count)
-            return time_since_update > adjusted_interval
-            
-        return time_since_update > self._update_interval
-    
-    def get_glosses(self):
-        """Get cached glosses with performance logging"""
         try:
             start_time = datetime.now()
+            logger.info("Starting to load gloss data to cache")
             
-            if self._needs_update():
-                self._load_cache()
-                
+            # Load all valid gloss words
+            docs = self._db.collection('asl_mappings').stream()
+            self._cache = {doc.id for doc in docs}
+            
+            if len(self._cache) < 100:  # Basic validation
+                raise ValueError(f"Suspiciously small number of glosses loaded: {len(self._cache)}")
+            
+            self._initialized = True
+            
             end_time = datetime.now()
             duration = (end_time - start_time).total_seconds()
-            logger.info(f"Cache access completed in {duration:.3f} seconds")
-            
-            return self._cache
+            logger.info(f"Cache loaded successfully with {len(self._cache)} glosses in {duration:.3f} seconds")
             
         except Exception as e:
-            logger.error(f"Error accessing cache: {e}")
-            if self._backup_cache:
-                logger.info("Falling back to backup cache")
-                return self._backup_cache
+            logger.error(f"Cache initialization failed: {e}")
             raise
+    
+    def get_glosses(self):
+        """Get all cached glosses"""
+        return self._cache
 
 class ASLGlossConverter:
-    """ASL Gloss Converter"""
+    """
+    Core processor for text to ASL gloss conversion.
+    
+    Handles the complete pipeline of converting text input
+    to ASL gloss notation, including language detection,
+    translation, and gloss matching.
+    """
+    
     def __init__(self):
+        """Initialize converter with required services and models"""
         try:
             # Use cached glosses
             self.gloss_cache = GlossCache.get_instance()
@@ -138,7 +103,7 @@ class ASLGlossConverter:
 
             # Initialize Translation client
             self.translate_client = translate.TranslationServiceClient()
-            self.project_id = "genasl"  # Your GCP project ID
+            self.project_id = "genasl"
             self.location = "global"
             self.parent = f"projects/{self.project_id}/locations/{self.location}"
 
@@ -148,15 +113,14 @@ class ASLGlossConverter:
                 raise ValueError("GEMINI_API_KEY not found in environment variables")
             genai.configure(api_key=api_key)
             
-            # Configure Gemini 2.0 Flash with optimized settings
             self.model = genai.GenerativeModel(
                 model_name="gemini-2.0-flash-exp",
                 generation_config={
-                    "temperature": 0.1,     # Low temperature for consistency
-                    "top_p": 0.8,           # Reduced for faster decisions
-                    "top_k": 20,            # Reduced candidates
-                    "max_output_tokens": 100,  # Limited output length
-                    "candidate_count": 1     # Single response
+                    "temperature": 0.1,
+                    "top_p": 0.8,
+                    "top_k": 20,
+                    "max_output_tokens": 100,
+                    "candidate_count": 1
                 }
             )
             
@@ -197,19 +161,16 @@ class ASLGlossConverter:
             raise
 
     def translate_text(self, text):
-        """Translate text to English using Google Cloud Translation API"""
+        """Translate text to English"""
         try:
             logger.info(f"Starting translation for text: {text}")
             
-            # Detect language
             source_language = self.detect_language(text)
             
-            # If already English, return as is
             if source_language == 'en':
                 logger.info("Text is already in English")
                 return text
 
-            # Translate to English
             request = {
                 "parent": self.parent,
                 "contents": [text],
@@ -258,15 +219,14 @@ class ASLGlossConverter:
     def convert_text_to_gloss(self, text):
         """Convert text to ASL gloss notation"""
         try:
-            # Clean input text
+            # Clean and translate text
             cleaned_text = self._clean_text(text)
             logger.info(f"Processing text: {cleaned_text}")
 
-            # Translate text to English
             english_text = self.translate_text(cleaned_text)
             logger.info(f"Translated text: {english_text}")
 
-            # Build optimized Gemini prompt
+            # Generate gloss using Gemini AI
             prompt = f"""Convert to ASL gloss notation. Rules:
 1. ALL CAPS
 2. Keep: nouns, verbs, adjectives, AND/OR/BUT
@@ -279,14 +239,12 @@ Text: {english_text}
 
 Return ONLY gloss words."""
 
-            # Call Gemini API
             try:
                 response = self.model.generate_content(prompt)
             except Exception as e:
                 logger.error(f"Gemini API error: {e}")
                 raise
 
-            # Clean and process response
             raw_gloss = response.text.strip().upper()
             words = raw_gloss.split()
             
@@ -314,7 +272,6 @@ Return ONLY gloss words."""
                         skipped_words.append(clean_word)
                         logger.warning(f"Skipped word with no match: {clean_word}")
 
-            # Validate results
             if not final_words:
                 raise ValueError("No valid ASL glosses found for the input text")
 
@@ -338,9 +295,9 @@ Return ONLY gloss words."""
 
 @functions_framework.http
 def text_to_gloss(request):
-    """HTTP Cloud Function for text-to-gloss conversion."""
+    """HTTP handler for text to gloss conversion"""
     
-    # Set CORS headers
+    # Handle CORS
     if request.method == 'OPTIONS':
         headers = {
             'Access-Control-Allow-Origin': '*',
@@ -356,9 +313,10 @@ def text_to_gloss(request):
     }
 
     try:
-        # Validate request
+        # Get request data
         request_json = request.get_json()
         if not request_json or 'text' not in request_json:
+            logger.error("No text provided in request")
             return json.dumps({
                 'error': 'No text provided',
                 'success': False
@@ -366,6 +324,7 @@ def text_to_gloss(request):
 
         text = request_json['text']
         if not text.strip():
+            logger.error("Empty text provided")
             return json.dumps({
                 'error': 'Empty text provided',
                 'success': False
