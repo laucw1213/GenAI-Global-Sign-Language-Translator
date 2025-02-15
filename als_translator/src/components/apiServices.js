@@ -135,28 +135,6 @@ const rateLimiter = {
   }
 };
 
-// Cache implementation
-const cache = new Map();
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-
-const withCache = async (key, fn) => {
-  const cached = cache.get(key);
-  if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-    logger.log('INFO', 'Cache hit', { Key: key });
-    return cached.value;
-  }
-
-  logger.log('INFO', 'Cache miss, fetching new data', { Key: key });
-  const result = await fn();
-  
-  cache.set(key, {
-    value: result,
-    timestamp: Date.now()
-  });
-  
-  return result;
-};
-
 // Utility functions
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -183,29 +161,26 @@ export const processContent = async (content, type = 'text') => {
   try {
     await rateLimiter.acquire();
 
-    const cacheKey = `${type}:${typeof content === 'string' ? content : content.size}`;
-    
-    const result = await withCache(cacheKey, async () => {
-      if (type === 'text') {
-        // Just return the text as is, translation will be handled by backend
-        return content;
-      } else if (type === 'audio') {
-        // Get transcription from Whisper API
-        const transcriptionResult = await transcribeAudio(content);
-        if (!transcriptionResult.success) {
-          throw new Error('Transcription failed');
-        }
-        
-        logger.log('INFO', 'Transcription successful', {
-          'Transcribed Text': transcriptionResult.text
-        });
-        
-        // Return transcribed text directly
-        return transcriptionResult.text;
-      } else {
-        throw new Error('Unsupported content type');
+    let result;
+    if (type === 'text') {
+      // Just return the text as is, translation will be handled by backend
+      result = content;
+    } else if (type === 'audio') {
+      // Get transcription from Whisper API
+      const transcriptionResult = await transcribeAudio(content);
+      if (!transcriptionResult.success) {
+        throw new Error('Transcription failed');
       }
-    });
+      
+      logger.log('INFO', 'Transcription successful', {
+        'Transcribed Text': transcriptionResult.text
+      });
+      
+      // Return transcribed text directly
+      result = transcriptionResult.text;
+    } else {
+      throw new Error('Unsupported content type');
+    }
 
     logger.log('SUCCESS', 'Content processing complete');
     return result;
@@ -216,11 +191,6 @@ export const processContent = async (content, type = 'text') => {
 };
 
 export const debug = {
-  clearCache: () => {
-    cache.clear();
-    logger.log('INFO', 'Cache cleared');
-  },
-  
   resetRateLimiter: () => {
     rateLimiter.tokens = rateLimiter.maxTokens;
     rateLimiter.lastRefill = Date.now();

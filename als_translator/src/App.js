@@ -6,7 +6,7 @@ import { UploadFile } from "./components/UploadFile";
 import { HandRaisedIcon, ArrowUpIcon, ArrowDownIcon } from "@heroicons/react/24/outline";
 import axios from "axios";
 
-const WORKFLOW_URL = "https://workflowexecutions.googleapis.com/v1/projects/genasl/locations/asia-east1/workflows/asl-translation/executions";
+const WORKFLOW_URL = "https://workflowexecutions.googleapis.com/v1/projects/genasl/locations/us-central1/workflows/ASL-workflow/executions";
 const AUTH_URL = "https://asia-east1-genasl.cloudfunctions.net/get-auth-token";
 
 function App() {
@@ -143,7 +143,7 @@ function App() {
           throw new Error('Processing timeout');
         }
 
-        setResult(JSON.parse(executionResult));
+        setResult([JSON.parse(executionResult)]);
       } else {
         throw new Error('Invalid workflow response');
       }

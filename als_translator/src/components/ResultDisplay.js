@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { PlayCircle, PauseCircle, SkipForward, SkipBack, Volume2, RefreshCcw } from "lucide-react";
 
@@ -21,7 +22,7 @@ const VideoPlaylist = ({ videos, originalText }) => {
       for (let i = 0; i < preloadCount; i++) {
         const video = videoRefs.current[i].current;
         if (video) {
-          video.src = videos[i].video_url;
+          video.src = videos[i].mapValue.fields.video_url.stringValue;
           // Set the background color of video
           video.style.backgroundColor = '#000';
           await video.load();
@@ -65,7 +66,7 @@ const VideoPlaylist = ({ videos, originalText }) => {
         const nextIndex = (currentVideoIndex + 1) % videos.length;
         const nextVideo = videoRefs.current[nextIndex].current;
         if (nextVideo && !nextVideo.src) {
-          nextVideo.src = videos[nextIndex].video_url;
+          nextVideo.src = videos[nextIndex].mapValue.fields.video_url.stringValue;
           nextVideo.style.backgroundColor = '#000';
           nextVideo.load();
         }
@@ -81,7 +82,7 @@ const VideoPlaylist = ({ videos, originalText }) => {
         if (nextVideo) {
           // Ensure next video is loaded and ready
           if (!nextVideo.src) {
-            nextVideo.src = videos[nextIndex].video_url;
+            nextVideo.src = videos[nextIndex].mapValue.fields.video_url.stringValue;
             nextVideo.style.backgroundColor = '#000';
             await nextVideo.load();
           }
@@ -103,7 +104,7 @@ const VideoPlaylist = ({ videos, originalText }) => {
             const preloadIndex = (nextIndex + 1) % videos.length;
             const preloadVideo = videoRefs.current[preloadIndex].current;
             if (preloadVideo && !preloadVideo.src) {
-              preloadVideo.src = videos[preloadIndex].video_url;
+              preloadVideo.src = videos[preloadIndex].mapValue.fields.video_url.stringValue;
               preloadVideo.style.backgroundColor = '#000';
               preloadVideo.load();
             }
@@ -149,7 +150,7 @@ const VideoPlaylist = ({ videos, originalText }) => {
     
     if (nextVideo) {
       if (!nextVideo.src) {
-        nextVideo.src = videos[nextIndex].video_url;
+        nextVideo.src = videos[nextIndex].mapValue.fields.video_url.stringValue;
         nextVideo.style.backgroundColor = '#000';
         await nextVideo.load();
       }
@@ -178,7 +179,7 @@ const VideoPlaylist = ({ videos, originalText }) => {
     
     if (prevVideo) {
       if (!prevVideo.src) {
-        prevVideo.src = videos[prevIndex].video_url;
+        prevVideo.src = videos[prevIndex].mapValue.fields.video_url.stringValue;
         prevVideo.style.backgroundColor = '#000';
         await prevVideo.load();
       }
@@ -381,13 +382,13 @@ export function ResultDisplay({ result }) {
         </ResultCard>
       )}
 
-      {videoResponse?.video_mappings && videoResponse.video_mappings.length > 0 && (
+      {videoResponse?.mappings && videoResponse.mappings.length > 0 && (
         <ResultCard 
-          title={`Sign Language Videos (${videoResponse.total_clips} signs)`} 
+          title={`Sign Language Videos (${videoResponse.total_mappings} signs)`} 
           indicator="green"
         >
           <VideoPlaylist 
-            videos={videoResponse.video_mappings} 
+            videos={videoResponse.mappings.map(video => Array.isArray(video) ? video[0] : video)} 
             originalText={originalText}
           />
         </ResultCard>
