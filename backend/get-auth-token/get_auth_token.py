@@ -1,66 +1,80 @@
+import os
+import logging
 from google.auth import default, impersonated_credentials
 from google.auth.transport.requests import Request
 import functions_framework
 from flask import jsonify, make_response
 import google.auth.transport.requests
+import traceback
 
-SERVICE_ACCOUNT = 'project-genasl@genasl.iam.gserviceaccount.com'
-SCOPES = ['https://www.googleapis.com/auth/cloud-platform']
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Service account that will be impersonated
+TARGET_SERVICE_ACCOUNT = 'project-genasl@genasl.iam.gserviceaccount.com'
+# Required OAuth 2.0 scopes
+SCOPES = [
+    'https://www.googleapis.com/auth/cloud-platform',
+    'https://www.googleapis.com/auth/workflows'
+]
 
 def cors_enabled_function(request):
-    # 設置 CORS headers
     headers = {
-        'Access-Control-Allow-Origin': 'https://storage.googleapis.com',
+        'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-        'Access-Control-Allow-Credentials': 'true',
         'Access-Control-Max-Age': '3600'
     }
 
-    # 如果是 OPTIONS 請求，直接返回
     if request.method == 'OPTIONS':
         return ('', 204, headers)
 
     try:
-        # 獲取默認憑證
-        source_credentials, project = default()
+        logger.info('Starting authentication process')
         
-        # 建立模擬憑證
-        target_credentials = impersonated_credentials.Credentials(
-            source_credentials=source_credentials,
-            target_principal=SERVICE_ACCOUNT,
-            target_scopes=SCOPES,
-            lifetime=3600  # 1 小時
-        )
+        # Get the default credentials that will do the impersonation
+        credentials, project = default()
+        logger.info(f'Using project: {project}')
+
+        # Get a new token with extended scopes
+        credentials.refresh(Request())
         
-        # 刷新令牌
-        auth_req = google.auth.transport.requests.Request()
-        target_credentials.refresh(auth_req)
+        # Create a token directly
+        token = credentials.token
+        expiry = credentials.expiry
+
+        response_data = {
+            'token': token,
+            'expiry': expiry.isoformat() if expiry else None,
+            'project': project
+        }
+
+        response = make_response(jsonify(response_data))
         
-        response = make_response(jsonify({
-            'token': target_credentials.token,
-            'expiry': target_credentials.expiry.isoformat() if target_credentials.expiry else None
-        }))
-        
-        # 添加 CORS headers
         for key, value in headers.items():
             response.headers[key] = value
             
+        logger.info('Authentication successful')
         return response
 
     except Exception as e:
-        error_response = make_response(jsonify({
-            'error': str(e),
-            'message': '無法獲取認證令牌'
-        }), 500)
+        logger.error(f'Authentication error: {str(e)}')
+        logger.error(f'Traceback: {traceback.format_exc()}')
         
-        # 添加 CORS headers
+        error_data = {
+            'error': str(e),
+            'message': 'Authentication failed',
+            'trace': traceback.format_exc()
+        }
+        
+        error_response = make_response(jsonify(error_data), 500)
+        
         for key, value in headers.items():
             error_response.headers[key] = value
             
         return error_response
 
-# 註冊 HTTP 函數
 @functions_framework.http
 def get_auth_token(request):
     return cors_enabled_function(request)
