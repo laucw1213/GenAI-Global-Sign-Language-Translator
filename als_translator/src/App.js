@@ -1,55 +1,16 @@
 import React, { useState, useEffect } from "react";
-import { TextInput } from "./components/TextInput";
-import { AudioRecorder } from "./components/AudioRecorder";
-import { ResultDisplay } from "./components/ResultDisplay";
-import { UploadFile } from "./components/UploadFile";
+import useAuth from "./services/gcp/auth";
+import useWorkflow from "./services/gcp/workflow";
+import { TextInput } from "./components/input/TextInput";
+import { AudioRecorder } from "./components/input/AudioRecorder";
+import { ResultDisplay } from "./components/display/ResultDisplay";
+import { UploadFile } from "./components/input/UploadFile";
 import { HandRaisedIcon, ArrowUpIcon, ArrowDownIcon } from "@heroicons/react/24/outline";
-import axios from "axios";
-
-const WORKFLOW_URL = process.env.REACT_APP_WORKFLOW_URL;
-const AUTH_URL = process.env.REACT_APP_AUTH_URL;
 
 function App() {
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState(null);
-  const [error, setError] = useState(null);
-  const [token, setToken] = useState(null);
-  const [lastTokenRefresh, setLastTokenRefresh] = useState(0);
   const [showResults, setShowResults] = useState(false);
-
-  const refreshToken = async () => {
-    try {
-      const response = await fetch(AUTH_URL, {
-        method: 'GET',
-        headers: { 'Accept': 'application/json' },
-        mode: 'cors'
-      });
-
-      if (!response.ok) {
-        throw new Error(`Authentication failed: ${response.status}`);
-      }
-
-      const data = await response.json();
-      
-      if (data.token) {
-        setToken(data.token);
-        setLastTokenRefresh(Date.now());
-        setError(null);
-      } else {
-        throw new Error('Token not received');
-      }
-    } catch (err) {
-      console.error("Authentication error:", err);
-      setError("Authentication failed: " + err.message);
-      setToken(null);
-    }
-  };
-
-  useEffect(() => {
-    refreshToken();
-    const tokenRefreshInterval = setInterval(refreshToken, 50 * 60 * 1000);
-    return () => clearInterval(tokenRefreshInterval);
-  }, []);
+  const { token, error: authError, refreshToken } = useAuth();
+  const { loading, result, error, processText } = useWorkflow(token, refreshToken);
 
   useEffect(() => {
     if (result) {
@@ -61,103 +22,10 @@ function App() {
   }, [result]);
 
   const handleRecordingComplete = async (text) => {
-    // 清除旧的结果
-    setResult(null);
-    
     if (!text) {
-      setError('Could not get transcription result');
       return;
     }
-  
-    try {
-      await processText(String(text).trim());
-    } catch (error) {
-      console.error('Processing recording error:', error);
-      setError(error.message || 'Error processing recording result');
-    }
-  };
-  
-  const processText = async (text) => {
-    // 清除旧的结果
-    setResult(null);
-    
-    if (!token) {
-      setError("Authentication required");
-      return;
-    }
-  
-    if (!text.trim()) {
-      setError("Please enter text");
-      return;
-    }
-  
-    try {
-      setLoading(true);
-      setError(null);
-      
-      // 确保text是字符串
-      const textToProcess = typeof text === 'object' ? JSON.stringify(text) : String(text).trim();
-      
-      const requestBody = {
-        argument: JSON.stringify({ 
-          text: textToProcess
-        }),
-        callLogLevel: "CALL_LOG_LEVEL_UNSPECIFIED"
-      };
-  
-      console.log('Sending to workflow:', requestBody);
-  
-      const response = await axios.post(WORKFLOW_URL, requestBody, {
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "Content-Type": "application/json"
-        }
-      });
-
-      if (response.data?.name) {
-        const executionName = response.data.name;
-        let executionResult = null;
-        const maxAttempts = 100;
-        let attempts = 0;
-
-        while (!executionResult && attempts < maxAttempts) {
-          attempts++;
-          await new Promise(resolve => setTimeout(resolve, 2000));
-
-          const statusResponse = await axios.get(
-            `https://workflowexecutions.googleapis.com/v1/${executionName}`,
-            {
-              headers: { "Authorization": `Bearer ${token}` }
-            }
-          );
-          
-          if (statusResponse.data.state === "SUCCEEDED") {
-            executionResult = statusResponse.data.result;
-            break;
-          } else if (statusResponse.data.state === "FAILED") {
-            throw new Error(statusResponse.data.error?.message || 'Workflow failed');
-          }
-        }
-
-        if (!executionResult) {
-          throw new Error('Processing timeout');
-        }
-
-        setResult([JSON.parse(executionResult)]);
-      } else {
-        throw new Error('Invalid workflow response');
-      }
-    } catch (err) {
-      console.error("Processing error:", err);
-      setError(err.message || 'Processing failed');
-      setResult(null);
-      
-      if (err.response?.status === 401) {
-        refreshToken();
-      }
-    } finally {
-      setLoading(false);
-    }
+    await processText(String(text).trim());
   };
 
   const toggleResults = () => {
@@ -229,7 +97,7 @@ function App() {
               </div>
 
               {/* Error Messages */}
-              {error && (
+              {(error || authError) && (
                 <div className="mt-6 p-4 bg-red-50 rounded-lg">
                   <div className="flex">
                     <div className="flex-shrink-0">
@@ -238,7 +106,7 @@ function App() {
                       </svg>
                     </div>
                     <div className="ml-3">
-                      <p className="text-sm text-red-700">{error}</p>
+                      <p className="text-sm text-red-700">{error || authError}</p>
                     </div>
                   </div>
                 </div>

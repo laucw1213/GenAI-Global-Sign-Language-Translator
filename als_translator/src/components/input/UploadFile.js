@@ -1,7 +1,7 @@
 // UploadFile.js
 import React, { useState, useRef } from 'react';
 import { Upload } from 'lucide-react';
-import { processContent } from './apiServices';
+import { processContent } from '../../services/api/apiServices';
 
 // iOS device detection regex
 const IOS_REGEX = /iPhone|iPad|iPod/i;

@@ -1,7 +1,7 @@
 // TextInput.js
 import React, { useState, useCallback } from 'react';
 import { AlertCircle } from 'lucide-react';
-import { processContent } from './apiServices';
+import { processContent } from '../../services/api/apiServices';
 
 export function TextInput({ onSubmit, disabled }) {
   const [text, setText] = useState("");

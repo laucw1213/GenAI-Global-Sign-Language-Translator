@@ -1,7 +1,7 @@
 // AudioRecorder.js
 import React, { useState, useRef, useEffect } from "react";
 import { MicrophoneIcon, StopIcon } from "@heroicons/react/24/solid";
-import { processContent } from './apiServices';
+import { processContent } from '../../services/api/apiServices';
 
 const MAX_RECORDING_TIME = 10000; // 10 seconds
 
