@@ -16,8 +16,8 @@ export function TextInput({ onSubmit, disabled }) {
     setError("");
 
     try {
-      const processedText = await processContent(text, 'text');
-      onSubmit(processedText.trim());
+      const processedResult = await processContent(text, 'text');
+      onSubmit(processedResult.text.trim());
       setText("");
     } catch (err) {
       console.error("Error:", err);
