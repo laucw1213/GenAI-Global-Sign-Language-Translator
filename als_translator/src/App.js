@@ -6,8 +6,8 @@ import { UploadFile } from "./components/UploadFile";
 import { HandRaisedIcon, ArrowUpIcon, ArrowDownIcon } from "@heroicons/react/24/outline";
 import axios from "axios";
 
-const WORKFLOW_URL = "https://workflowexecutions.googleapis.com/v1/projects/genasl/locations/us-central1/workflows/ASL-workflow/executions";
-const AUTH_URL = "https://asia-east1-genasl.cloudfunctions.net/get-auth-token";
+const WORKFLOW_URL = process.env.REACT_APP_WORKFLOW_URL;
+const AUTH_URL = process.env.REACT_APP_AUTH_URL;
 
 function App() {
   const [loading, setLoading] = useState(false);
