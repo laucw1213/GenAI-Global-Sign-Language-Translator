@@ -1,6 +1,6 @@
 // apiServices.js
 
-const HUGGING_FACE_TOKEN = "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";
+const HUGGING_FACE_TOKEN = process.env.REACT_APP_HUGGING_FACE_TOKEN;
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000;
 
@@ -164,22 +164,33 @@ export const processContent = async (content, type = 'text') => {
     let result;
     if (type === 'text') {
       // Just return the text as is, translation will be handled by backend
-      result = content;
+      result = {
+        success: true,
+        text: content
+      };
     } else if (type === 'audio') {
       // Get transcription from Whisper API
       const transcriptionResult = await transcribeAudio(content);
       if (!transcriptionResult.success) {
-        throw new Error('Transcription failed');
+        return {
+          success: false,
+          error: transcriptionResult.error || 'Transcription failed'
+        };
       }
       
       logger.log('INFO', 'Transcription successful', {
         'Transcribed Text': transcriptionResult.text
       });
       
-      // Return transcribed text directly
-      result = transcriptionResult.text;
+      result = {
+        success: true,
+        text: transcriptionResult.text
+      };
     } else {
-      throw new Error('Unsupported content type');
+      return {
+        success: false,
+        error: 'Unsupported content type'
+      };
     }
 
     logger.log('SUCCESS', 'Content processing complete');

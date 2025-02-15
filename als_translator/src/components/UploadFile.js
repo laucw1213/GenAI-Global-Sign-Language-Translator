@@ -66,17 +66,20 @@ export function UploadFile({ onTranscriptionComplete, disabled }) {
       
       setUploadProgress(90);
       
-      if (!result || !result.success) {
-        throw new Error(result?.error || 'Transcription failed');
+      if (!result.success) {
+        setProcessingStatus("Processing failed!");
+        alert(result.error || 'Audio file processing failed. Please try again.');
+        return;
       }
+      
       onTranscriptionComplete(result.text);
       setProcessingStatus("Processing complete!");
-      
       setUploadProgress(100);
       
     } catch (error) {
       console.error('Processing error:', error);
-      alert('Audio file processing error: ' + error.message);
+      setProcessingStatus("Processing failed!");
+      alert(`Audio file processing error: ${error.message}`);
     } finally {
       setTimeout(() => {
         setProcessingStatus("");
