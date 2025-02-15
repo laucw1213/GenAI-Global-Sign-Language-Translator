@@ -6,7 +6,7 @@ main:
           - error_response: { error: "Input not provided", timestamp: '${time.format(sys.now())}' }
           - timestamp: '${time.format(sys.now())}'
           - project_id: "genasl"
-          - location: "us-central1"
+          - location: "global"
 
     - logInit:
         call: sys.log
@@ -146,7 +146,7 @@ main:
     - callGenerateGloss:
         call: http.post
         args:
-          url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=AIzaSyAri0eppvOZwOaveUGgFAttDcirFnaKGCg"
+          url: ${"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + sys.get_env("GEMINI_API_KEY")}
           headers:
             Content-Type: "application/json"
           body:
@@ -262,57 +262,22 @@ main:
                   text: '${"Cache save error: " + json.encode_to_string(e)}'
         next: prepareResult
 
+
     - prepareResult:
         assign:
-          - formatted_video_mappings: []
-          - current_index_format: 0
-        next: formatVideoMappings
-
-    - formatVideoMappings:
-        switch:
-          - condition: ${current_index_format < len(video_mappings)}
-            steps:
-              - processMapping:
-                  assign:
-                    - current_mapping:
-                        duration: 0
-                        gloss: ${video_mappings[current_index_format].mapValue.fields.gloss.stringValue}
-                        video_url: ${video_mappings[current_index_format].mapValue.fields.video_url.stringValue}
-                        video_path: ${video_mappings[current_index_format].mapValue.fields.gloss.stringValue + ".mp4"}
-                        metadata:
-                          format: "video/mp4"
-                          video_info:
-                            content_type: "video/mp4"
-                            public_url: ${video_mappings[current_index_format].mapValue.fields.video_url.stringValue}
-                    - formatted_video_mappings: ${list.concat(formatted_video_mappings, [current_mapping])}
-                    - current_index_format: ${current_index_format + 1}
-                  next: formatVideoMappings
-          - condition: ${true}
-            next: prepareFinalResult
-
-    - prepareFinalResult:
-        assign:
-          - timestamp: ${time.format(sys.now())}
           - result:
-              - success: true
-              - original_input:
-                  text: ${input_text}
-              - gloss_response:
-                  cleaned_text: ${english_text}
-                  english_text: ${english_text}
-                  gloss: ${gloss_text}
-                  original_text: ${input_text}
-                  replacements: {}
-                  skipped_words: []
-                  success: true
-                  word_count: ${len(characters)}
-              - video_response:
-                  timestamp: ${timestamp}
-                  total_clips: ${len(formatted_video_mappings)}
-                  video_mappings: ${formatted_video_mappings}
-              - execution_info:
-                  - execution_id: null
-                  - timestamp: ${timestamp}
+              success: true
+              original_input:
+                text: ${input_text}
+              gloss_response:
+                original_text: ${english_text}
+                gloss: ${gloss_text}
+                characters: ${characters}
+              video_response:
+                mappings: ${video_mappings}
+                total_mappings: ${len(video_mappings)}
+              execution_info:
+                - timestamp: '${time.format(sys.now())}'
         next: logSuccess
 
     - logSuccess:
