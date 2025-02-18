@@ -1,0 +1,16 @@
+# dependencies
+/node_modules
+
+# production
+/build
+
+# environment
+.env*
+
+# Firebase
+.firebase/
+
+# OS
+.DS_Store
+
+firebase-service-account.json

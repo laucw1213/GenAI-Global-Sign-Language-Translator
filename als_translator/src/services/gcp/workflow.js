@@ -3,7 +3,7 @@ import axios from 'axios';
 
 const WORKFLOW_URL = process.env.REACT_APP_WORKFLOW_URL;
 
-const useWorkflow = (token, refreshToken) => {
+const useWorkflow = (token, refreshToken, user, recordTranslation) => {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
@@ -40,7 +40,7 @@ const useWorkflow = (token, refreshToken) => {
   };
 
   const processText = async (text) => {
-    // 清除旧的结果
+    // 清除舊的結果
     setResult(null);
     
     if (!token) {
@@ -53,12 +53,15 @@ const useWorkflow = (token, refreshToken) => {
       return;
     }
   
+    const startTime = Date.now();
+    let textToProcess;
+    
     try {
       setLoading(true);
       setError(null);
       
-      // 确保text是字符串
-      const textToProcess = typeof text === 'object' ? JSON.stringify(text) : String(text).trim();
+      // 確保text是字符串
+      textToProcess = typeof text === 'object' ? JSON.stringify(text) : String(text).trim();
       
       const requestBody = {
         argument: JSON.stringify({ 
@@ -78,7 +81,20 @@ const useWorkflow = (token, refreshToken) => {
 
       if (response.data?.name) {
         const executionResult = await checkExecutionStatus(response.data.name);
-        setResult([JSON.parse(executionResult)]);
+        const parsedResult = JSON.parse(executionResult);
+        setResult([parsedResult]);
+
+        const processingTime = (Date.now() - startTime) / 1000; // 轉換為秒
+
+        // 記錄成功的翻譯
+        if (user && recordTranslation) {
+          await recordTranslation(user.uid, {
+            input: textToProcess,
+            output: parsedResult.gloss_response?.gloss || '',
+            success: true,
+            processing_time: processingTime
+          });
+        }
       } else {
         throw new Error('Invalid workflow response');
       }
@@ -86,6 +102,18 @@ const useWorkflow = (token, refreshToken) => {
       console.error("Processing error:", err);
       setError(err.message || 'Processing failed');
       setResult(null);
+      
+      const processingTime = (Date.now() - startTime) / 1000; // 轉換為秒
+
+      // 記錄失敗的翻譯
+      if (user && recordTranslation) {
+        await recordTranslation(user.uid, {
+          input: textToProcess,
+          output: '',
+          success: false,
+          processing_time: processingTime
+        });
+      }
       
       if (err.response?.status === 401) {
         refreshToken();

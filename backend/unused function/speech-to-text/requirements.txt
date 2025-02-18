@@ -1,4 +1,0 @@
-google-cloud-speech==2.21.0
-functions-framework==3.*
-soundfile
-numpy

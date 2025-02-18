@@ -30,25 +30,38 @@ Visit our website: [ASL Translator](https://storage.googleapis.com/asl-translato
 ![System Architecture](architecture.png)
 
 ### Architecture Overview
-1. **Frontend Layer**
-    - Chrome browser access
-    - Text, voice, and audio file input support
+1. **Client Side**
+    - Desktop and Mobile browser support
+    - Text, voice, and audio file input
+    - Whisper API integration for audio transcription
+    - Responsive user interface
+
+2. **Frontend (Firebase)**
+    - Firebase App Hosting for web application
+    - Firebase Authentication for secure access
+    - HTML/CSS/JavaScript implementation
     - React.js-based responsive interface
 
-2. **Speech Processing Layer**
-    - OpenAI Whisper via Hugging Face
-    - Multiple voice input format support
+3. **Security Layer**
+    - Firebase Authentication with OAuth 2.0
+    - Cloud Functions for token management
+    - Secure API access control
+    - Rate limiting and request validation
 
-3. **Core Processing Layer**
-    - Text-to-Gloss Function:
-        * Language detection and translation
-        * Sign language generation
-    - Gloss-to-Video Function:
-        * Video mapping and URL generation
+4. **Core Processing (Workflows)**
+    - Sentence cache for performance optimization
+    - Cloud Translation API integration
+    - Vertex AI (Gemini 2.0 flash) for ASL generation
+    - Video matching and processing
 
-4. **Data Storage Layer**
-    - Firestore: Sign language mapping storage
-    - Cloud Storage: Video file storage
+5. **Data Storage**
+    - Firestore Collections:
+        * sentence_cache: Performance optimization
+        * asl_mappings: Sign language data
+    - Cloud Storage:
+        * Video Dataset storage
+        * ASL Video delivery
+    - ComfyUI for video processing
 
 ## Core Features
 
@@ -73,33 +86,75 @@ Visit our website: [ASL Translator](https://storage.googleapis.com/asl-translato
 
 ### Process Flow
 1. **Input Processing**
-    - User input handling
-    - Voice-to-text conversion
+    - User authentication (OAuth 2.0)
+    - Text/voice/audio input handling
+    - Audio transcription via Whisper API
+    - Input validation and sanitization
 
-2. **Language Processing**
-    - Language detection
-    - English conversion
+2. **Cache and Translation**
+    - Check sentence cache (performance optimization)
+    - Language detection and automatic translation
+    - Cache hit strategies:
+        * Direct return of existing translations
+        * Periodic updates of popular content
+        * Smart preloading of related content
 
-3. **Sign Language Generation**
-    - AI-based symbol generation
-    - Expression optimization
+3. **Sign Language Processing**
+    - ASL Gloss generation via Vertex AI
+    - Expression optimization and grammar adjustment
+    - Cultural adaptation and localization
+    - Quality control and validation
 
-4. **Video Matching**
-    - Database query
-    - URL generation
+4. **Video Generation**
+    - Smart ASL video matching from database
+    - Video combination with seamless transitions
+    - Adaptive quality control
+    - Efficient URL generation and delivery
 
-5. **Result Display**
-    - Video combination
-    - Interface controls
+5. **Performance Optimization**
+    - Intelligent cache update strategies:
+        * Usage frequency based
+        * Time-based decay
+        * Dynamic content updates
+    - Response time optimization:
+        * Server-side rendering
+        * Resource preloading
+        * Dynamic resource allocation
+    - Resource management:
+        * Auto-scaling
+        * Load balancing
+        * Failover handling
+
+6. **Security Measures**
+    - Multi-layer authentication:
+        * JWT token validation
+        * Session management
+        * Permission control
+    - API security:
+        * Request rate limiting
+        * Parameter validation
+        * CORS policies
+    - Monitoring and auditing:
+        * Access logging
+        * Anomaly detection
+        * Real-time alerts
 
 ## Technical Implementation
 
 ### Core Technologies
-- **AI Model**: Gemini 2.0 Flash AI
-- **Speech Recognition**: OpenAI Whisper
-- **Language Service**: Google Cloud Translation
-- **Data Storage**: Google Cloud Platform
-- **Frontend**: React.js
+- **Frontend Framework**: React.js with Tailwind CSS
+- **Cloud Platform**: Google Cloud Platform
+- **Authentication**: Firebase Authentication
+- **AI Models**:
+    * Gemini 2.0 Flash AI for ASL generation
+    * Whisper API for speech recognition
+- **Storage Solutions**:
+    * Firestore for data management
+    * Cloud Storage for video files
+- **Processing Tools**:
+    * Cloud Translation API
+    * ComfyUI for video processing
+    * Cloud Functions for authentication
 
 ### AI Model Application
 #### Gemini 2.0 Flash AI Working Process
@@ -138,23 +193,50 @@ Visit our website: [ASL Translator](https://storage.googleapis.com/asl-translato
 
 ### Database Design
 #### Firestore Data Structure
+
+**sentence_cache Collection**
+```json
+{
+    "gloss_text": "I WANT BUY COFFEE",                 // Sign language text
+    "timestamp": "2025-02-14T04:49:17.311Z",          // Creation time
+    "video_mappings": [                                // Video mapping array
+        {
+            "gloss": "I",                              // Individual sign
+            "video_url": "https://storage.googleapis.com/genasl-video-files/I.mp4"  // Corresponding video URL
+        },
+        {
+            "gloss": "WANT",
+            "video_url": "https://storage.googleapis.com/genasl-video-files/WANT.mp4"
+        },
+        {
+            "gloss": "BUY",
+            "video_url": "https://storage.googleapis.com/genasl-video-files/BUY.mp4"
+        },
+        {
+            "gloss": "COFFEE",
+            "video_url": "https://storage.googleapis.com/genasl-video-files/COFFEE.mp4"
+        }
+    ]
+}
+```
+
 **asl_mappings Collection**
 ```json
 {
-    "category": "general",
-    "created_at": "2024-11-17T19:33:10.873Z",
-    "gloss": "TEST",
+    "category": "general",                              // Sign language category
+    "created_at": "2024-11-17T07:33:17.349Z",         // Creation time
+    "gloss": "TEST",                                   // Sign symbol
     "metadata": {
-        "format": "video/mp4"
+        "format": "video/mp4"                          // Video format
     },
     "video_info": {
-        "content_type": "video/mp4",
-        "created": "2024-11-08T13:18:52.410Z",
-        "public_url": "https://storage.googleapis.com/genasl-video-files/TEST.mp4",
-        "size": 243262,
-        "updated": "2024-11-08T13:18:52.410Z"
+        "content_type": "video/mp4",                   // Content type
+        "created": "2024-11-08T13:21:05.823Z",        // Video creation time
+        "public_url": "https://storage.googleapis.com/genasl-video-files/TEST.mp4", // Video URL
+        "size": 286522,                                // File size (bytes)
+        "updated": "2024-11-08T13:21:05.823Z"         // Last update time
     },
-    "video_path": "TEST.mp4"
+    "video_path": "TEST.mp4"                           // Video file path
 }
 ```
 
@@ -206,25 +288,38 @@ This project is not just a technical solution but a social innovation initiative
 ![系統架構圖](architecture.png)
 
 ### 架構說明
-1. **用戶界面層**
-    - Chrome瀏覽器訪問
-    - 支持文本、語音和音頻輸入
-    - 基於'React.js'的響應式界面
+1. **客戶端**
+    - 支持桌面和移動端瀏覽器
+    - 文本、語音和音頻文件輸入
+    - Whisper API音頻轉錄集成
+    - 響應式用戶界面
 
-2. **語音處理層**
-    - OpenAI Whisper處理
-    - 多種語音格式支持
+2. **前端（Firebase）**
+    - Firebase應用托管
+    - Firebase身份認證
+    - HTML/CSS/JavaScript實現
+    - 基於React.js的響應式界面
 
-3. **核心處理層**
-    - 文本轉手語功能：
-        * 語言檢測和翻譯
-        * 手語符號生成
-    - 手語轉視頻功能：
-        * 視頻映射和URL生成
+3. **安全層**
+    - 基於OAuth 2.0的Firebase認證
+    - 用於令牌管理的Cloud Functions
+    - 安全的API訪問控制
+    - 請求限制和驗證
 
-4. **數據存儲層**
-    - Firestore：手語映射存儲
-    - Cloud Storage：視頻文件存儲
+4. **核心處理（Workflows）**
+    - 句子緩存優化性能
+    - Cloud Translation API集成
+    - Vertex AI（Gemini 2.0 flash）生成ASL
+    - 視頻匹配和處理
+
+5. **數據存儲**
+    - Firestore集合：
+        * sentence_cache：性能優化
+        * asl_mappings：手語數據
+    - Cloud Storage：
+        * 視頻數據集存儲
+        * ASL視頻分發
+    - ComfyUI視頻處理
 
 ## 核心功能
 
@@ -249,33 +344,75 @@ This project is not just a technical solution but a social innovation initiative
 
 ### 處理流程
 1. **輸入處理**
-    - 用戶輸入處理
-    - 語音轉文本
+    - 用戶身份認證（OAuth 2.0）
+    - 文本/語音/音頻輸入處理
+    - 通過Whisper API進行音頻轉錄
+    - 輸入驗證和清理
 
-2. **語言處理**
-    - 語言檢測
-    - 英語轉換
+2. **緩存和翻譯**
+    - 檢查句子緩存（提升性能）
+    - 語言檢測和自動翻譯
+    - 緩存命中策略：
+        * 直接返回已存在翻譯
+        * 定期更新熱門內容
+        * 智能預加載相關內容
 
-3. **手語生成**
-    - AI符號生成
-    - 表達優化
+3. **手語處理**
+    - 通過Vertex AI生成ASL Gloss
+    - 表達優化和語法調整
+    - 文化適應和本地化
+    - 質量控制和驗證
 
-4. **視頻匹配**
-    - 數據庫查詢
-    - URL生成
+4. **視頻生成**
+    - 從數據庫智能匹配ASL視頻
+    - 視頻組合和無縫過渡處理
+    - 自適應質量控制
+    - 高效URL生成和分發
 
-5. **結果展示**
-    - 視頻組合
-    - 界面控制
+5. **性能優化**
+    - 智能緩存更新策略：
+        * 基於使用頻率
+        * 基於時間衰減
+        * 動態內容更新
+    - 響應時間優化：
+        * 服務器端渲染
+        * 資源預加載
+        * 動態資源分配
+    - 資源管理：
+        * 自動擴展
+        * 負載均衡
+        * 故障轉移
+
+6. **安全措施**
+    - 多層認證機制：
+        * JWT令牌驗證
+        * 會話管理
+        * 權限控制
+    - API安全：
+        * 請求限流
+        * 參數驗證
+        * CORS策略
+    - 監控和審計：
+        * 訪問日誌
+        * 異常檢測
+        * 實時警報
 
 ## 技術實現
 
 ### 核心技術
-- **AI模型**：Gemini 2.0 Flash AI
-- **語音識別**：OpenAI Whisper
-- **語言服務**：Google Cloud Translation
-- **數據存儲**：Google Cloud Platform
-- **前端框架**：React.js
+- **前端框架**：React.js與Tailwind CSS
+- **雲平台**：Google Cloud Platform
+- **身份認證**：Firebase Authentication
+- **AI模型**：
+    * Gemini 2.0 Flash AI用於ASL生成
+    * Whisper API用於語音識別
+- **存儲解決方案**：
+    * Firestore用於數據管理
+    * Cloud Storage用於視頻文件
+- **處理工具**：
+    * Cloud Translation API
+    * ComfyUI用於視頻處理
+    * Cloud Functions用於認證
 
 ### AI模型應用
 #### Gemini 2.0 Flash AI 工作流程
@@ -314,23 +451,50 @@ This project is not just a technical solution but a social innovation initiative
 
 ### 數據庫設計
 #### Firestore 數據結構
+
+**sentence_cache 集合**
+```json
+{
+    "gloss_text": "I WANT BUY COFFEE", // 手語文本
+    "timestamp": "2025-02-14T04:49:17.311Z", // 創建時間
+    "video_mappings": [ // 視頻映射數組
+        {
+            "gloss": "I", // 單個手語符號
+            "video_url": "https://storage.googleapis.com/genasl-video-files/I.mp4"  // 對應視頻URL
+        },
+        {
+            "gloss": "WANT",
+            "video_url": "https://storage.googleapis.com/genasl-video-files/WANT.mp4"
+        },
+        {
+            "gloss": "BUY",
+            "video_url": "https://storage.googleapis.com/genasl-video-files/BUY.mp4"
+        },
+        {
+            "gloss": "COFFEE",
+            "video_url": "https://storage.googleapis.com/genasl-video-files/COFFEE.mp4"
+        }
+    ]
+}
+```
+
 **asl_mappings 集合**
 ```json
 {
-    "category": "general",                              // 手語類別
-    "created_at": "2024-11-17T19:33:10.873Z",         // 創建時間
-    "gloss": "TEST",                                    // 手語符號
+    "category": "general", // 手語類別
+    "created_at": "2024-11-17T07:33:17.349Z", // 創建時間
+    "gloss": "TEST", // 手語符號
     "metadata": {
-        "format": "video/mp4"                          // 視頻格式
+        "format": "video/mp4" // 視頻格式
     },
     "video_info": {
-        "content_type": "video/mp4",                   // 內容類型
-        "created": "2024-11-08T13:18:52.410Z",        // 視頻創建時間
+        "content_type": "video/mp4", // 內容類型
+        "created": "2024-11-08T13:21:05.823Z",  // 視頻創建時間
         "public_url": "https://storage.googleapis.com/genasl-video-files/TEST.mp4", // 視頻URL
-        "size": 243262,                                // 文件大小
-        "updated": "2024-11-08T13:18:52.410Z"         // 更新時間
+        "size": 286522, // 文件大小（字節）
+        "updated": "2024-11-08T13:21:05.823Z" // 更新時間
     },
-    "video_path": "TEST.mp4"                           // 視頻路徑
+    "video_path": "TEST.mp4" // 視頻文件路徑
 }
 ```
 

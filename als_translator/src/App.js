@@ -9,8 +9,8 @@ import { HandRaisedIcon, ArrowUpIcon, ArrowDownIcon } from "@heroicons/react/24/
 
 function App() {
   const [showResults, setShowResults] = useState(false);
-  const { token, error: authError, refreshToken } = useAuth();
-  const { loading, result, error, processText } = useWorkflow(token, refreshToken);
+  const { token, user, error: authError, refreshToken, recordTranslation } = useAuth();
+  const { loading, result, error, processText } = useWorkflow(token, refreshToken, user, recordTranslation);
 
   useEffect(() => {
     if (result) {
