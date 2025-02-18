@@ -43,7 +43,7 @@ Visit our website: [ASL Translator](https://storage.googleapis.com/asl-translato
     - React.js-based responsive interface
 
 3. **Security Layer**
-    - Firebase Authentication with OAuth 2.0
+    - Firebase Anonymous Authentication
     - Cloud Functions for token management
     - Secure API access control
     - Rate limiting and request validation
@@ -56,6 +56,8 @@ Visit our website: [ASL Translator](https://storage.googleapis.com/asl-translato
 
 5. **Data Storage**
     - Firestore Collections:
+        * users: User data and usage statistics
+        * translations: Translation history records
         * sentence_cache: Performance optimization
         * asl_mappings: Sign language data
     - Cloud Storage:
@@ -86,7 +88,9 @@ Visit our website: [ASL Translator](https://storage.googleapis.com/asl-translato
 
 ### Process Flow
 1. **Input Processing**
-    - User authentication (OAuth 2.0)
+    - User authentication (Firebase Anonymous Login)
+    - Create/Update user profile
+    - Record usage statistics
     - Text/voice/audio input handling
     - Audio transcription via Whisper API
     - Input validation and sanitization
@@ -112,10 +116,10 @@ Visit our website: [ASL Translator](https://storage.googleapis.com/asl-translato
     - Efficient URL generation and delivery
 
 5. **Performance Optimization**
-    - Intelligent cache update strategies:
-        * Usage frequency based
-        * Time-based decay
-        * Dynamic content updates
+    - User data management:
+        * Delayed last_active updates
+        * Batch processing of usage_count
+        * Regular cleanup of expired data
     - Response time optimization:
         * Server-side rendering
         * Resource preloading
@@ -193,6 +197,29 @@ Visit our website: [ASL Translator](https://storage.googleapis.com/asl-translato
 
 ### Database Design
 #### Firestore Data Structure
+
+**users Collection**
+```json
+{
+    "profile": {
+        "created_at": "2025-02-19T00:00:00.000Z",  // 用戶創建時間
+        "last_active": "2025-02-19T00:00:00.000Z", // 最後活動時間
+        "usage_count": 0                            // 使用次數
+    }
+}
+```
+
+**translations Collection**
+```json
+{
+    "user_id": "anonymous_user_id",                // 關聯用戶ID
+    "timestamp": "2025-02-19T00:00:00.000Z",      // 翻譯時間
+    "input_text": "hello",                         // 輸入文本
+    "output_gloss": "HELLO",                       // 翻譯結果
+    "success_status": true,                        // 成功狀態
+    "processing_time": 2.5                         // 處理時間（秒）
+}
+```
 
 **sentence_cache Collection**
 ```json
@@ -301,7 +328,7 @@ This project is not just a technical solution but a social innovation initiative
     - 基於React.js的響應式界面
 
 3. **安全層**
-    - 基於OAuth 2.0的Firebase認證
+    - Firebase匿名認證
     - 用於令牌管理的Cloud Functions
     - 安全的API訪問控制
     - 請求限制和驗證
@@ -314,6 +341,8 @@ This project is not just a technical solution but a social innovation initiative
 
 5. **數據存儲**
     - Firestore集合：
+        * users：用戶數據和使用統計
+        * translations：翻譯歷史記錄
         * sentence_cache：性能優化
         * asl_mappings：手語數據
     - Cloud Storage：
@@ -344,7 +373,9 @@ This project is not just a technical solution but a social innovation initiative
 
 ### 處理流程
 1. **輸入處理**
-    - 用戶身份認證（OAuth 2.0）
+    - 用戶身份認證（Firebase匿名登錄）
+    - 創建/更新用戶檔案
+    - 記錄使用統計
     - 文本/語音/音頻輸入處理
     - 通過Whisper API進行音頻轉錄
     - 輸入驗證和清理
@@ -370,10 +401,10 @@ This project is not just a technical solution but a social innovation initiative
     - 高效URL生成和分發
 
 5. **性能優化**
-    - 智能緩存更新策略：
-        * 基於使用頻率
-        * 基於時間衰減
-        * 動態內容更新
+    - 用戶數據管理：
+        * 延遲更新last_active
+        * 批量處理usage_count
+        * 定期清理過期數據
     - 響應時間優化：
         * 服務器端渲染
         * 資源預加載
@@ -392,6 +423,10 @@ This project is not just a technical solution but a social innovation initiative
         * 請求限流
         * 參數驗證
         * CORS策略
+    - 數據訪問控制：
+        * 用戶只能訪問自己的數據（通過Firebase規則實現）
+        * 翻譯記錄權限管理（基於用戶ID的訪問控制）
+        * 數據隱私保護（匿名ID追踪，定期清理）
     - 監控和審計：
         * 訪問日誌
         * 異常檢測
@@ -451,6 +486,29 @@ This project is not just a technical solution but a social innovation initiative
 
 ### 數據庫設計
 #### Firestore 數據結構
+
+**users 集合**
+```json
+{
+    "profile": {
+        "created_at": "2025-02-19T00:00:00.000Z",  // 用戶創建時間
+        "last_active": "2025-02-19T00:00:00.000Z", // 最後活動時間
+        "usage_count": 0                            // 使用次數
+    }
+}
+```
+
+**translations 集合**
+```json
+{
+    "user_id": "anonymous_user_id",                // 關聯用戶ID
+    "timestamp": "2025-02-19T00:00:00.000Z",      // 翻譯時間
+    "input_text": "hello",                         // 輸入文本
+    "output_gloss": "HELLO",                       // 翻譯結果
+    "success_status": true,                        // 成功狀態
+    "processing_time": 2.5                         // 處理時間（秒）
+}
+```
 
 **sentence_cache 集合**
 ```json
