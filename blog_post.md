@@ -16,7 +16,7 @@ The translator is a modern web application that accepts multiple types of inputâ
 
 ## Architecture
 
-![System Architecture](architecture.png)
+![System Architecture](architecture2.png)
 
 Our solution leverages the robust infrastructure of Google Cloud Platform (GCP) to ensure high performance and scalability. Here's an overview of the architecture:
 
