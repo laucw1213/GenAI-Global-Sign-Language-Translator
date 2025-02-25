@@ -3,38 +3,37 @@ main:
   steps:
     - init:
         assign:
-          - error_response: { error: "Input not provided", timestamp: '${time.format(sys.now())}' }
-          - timestamp: '${time.format(sys.now())}'
-          - project_id: "genasl"
-          - location: "global"
+          - error_response: { error: "Input not provided", timestamp: '$${time.format(sys.now())}' }
+          - timestamp: '$${time.format(sys.now())}'
+          - project_id: $${sys.get_env("GOOGLE_CLOUD_PROJECT_ID")}
 
     - logInit:
         call: sys.log
         args:
-          text: '${time.format(sys.now())}'
+          text: '$${time.format(sys.now())}'
 
     - validateInput:
         switch:
-          - condition: ${args == null}
+          - condition: $${args == null}
             next: returnError
-          - condition: ${"text" in args}
+          - condition: $${"text" in args}
             assign:
-              - input_text: ${args.text}
+              - input_text: $${args.text}
             next: logInput
-          - condition: ${true}
+          - condition: $${true}
             next: returnError
 
     - logInput:
         call: sys.log
         args:
-          text: '${input_text}'
+          text: '$${input_text}'
         next: checkSentenceCache
 
     - checkSentenceCache:
         try:
           call: googleapis.firestore.v1.projects.databases.documents.get
           args:
-            name: ${"projects/" + project_id + "/databases/(default)/documents/sentence_cache/" + input_text}
+            name: $${"projects/" + project_id + "/databases/(default)/documents/sentence_cache/" + input_text}
           result: cache_result
         except:
           as: e
@@ -42,7 +41,7 @@ main:
             - logCacheError:
                 call: sys.log
                 args:
-                  text: '${"Cache check error: " + json.encode_to_string(e)}'
+                  text: '$${"Cache check error: " + json.encode_to_string(e)}'
             - continueToLangDetect:
                 next: callDetectLanguage
         next: processCacheResult
@@ -52,19 +51,19 @@ main:
           - logCacheResult:
               call: sys.log
               args:
-                text: '${json.encode_to_string(cache_result)}'
+                text: '$${json.encode_to_string(cache_result)}'
           - checkCache:
               try:
                 assign:
-                  - has_cache: ${cache_result != null and "fields" in cache_result and "gloss_text" in cache_result.fields and "video_mappings" in cache_result.fields}
-                  - cache_log: '${"Cache check result: " + input_text}'
+                  - has_cache: $${cache_result != null and "fields" in cache_result and "gloss_text" in cache_result.fields and "video_mappings" in cache_result.fields}
+                  - cache_log: '$${"Cache check result: " + input_text}'
               except:
                 as: e
                 steps:
                   - logCacheCheckError:
                       call: sys.log
                       args:
-                        text: '${json.encode_to_string(e)}'
+                        text: '$${json.encode_to_string(e)}'
                   - setDefaults:
                       assign:
                         - has_cache: false
@@ -72,61 +71,61 @@ main:
           - logCacheStatus:
               call: sys.log
               args:
-                text: '${cache_log}'
+                text: '$${cache_log}'
           - decidePath:
               switch:
-                - condition: ${has_cache}
+                - condition: $${has_cache}
                   steps:
                     - useCache:
                         assign:
-                          - gloss_text: ${cache_result.fields.gloss_text.stringValue}
-                          - video_mappings: ${cache_result.fields.video_mappings.arrayValue.values}
+                          - gloss_text: $${cache_result.fields.gloss_text.stringValue}
+                          - video_mappings: $${cache_result.fields.video_mappings.arrayValue.values}
                         next: prepareResult
-                - condition: ${true}
+                - condition: $${true}
                   next: callDetectLanguage
 
     - callDetectLanguage:
         call: googleapis.translate.v3.projects.locations.detectLanguage
         args:
-          parent: ${"projects/" + project_id + "/locations/" + location}
+          parent: $${"projects/" + project_id + "/locations/global"}
           body:
-            content: ${input_text}
+            content: $${input_text}
             mimeType: "text/plain"
         result: detection_result
 
     - logDetection:
         call: sys.log
         args:
-          text: '${detection_result.languages[0].languageCode}'
+          text: '$${detection_result.languages[0].languageCode}'
       
     - translateIfNeeded:
         switch:
-          - condition: ${detection_result.languages[0].languageCode == "en"}
+          - condition: $${detection_result.languages[0].languageCode == "en"}
             assign:
-              - english_text: ${input_text}
+              - english_text: $${input_text}
             next: logEnglishText
-          - condition: ${true}
+          - condition: $${true}
             next: callTranslateText
 
     - callTranslateText:
         call: googleapis.translate.v3.projects.locations.translateText
         args:
-          parent: ${"projects/" + project_id + "/locations/" + location}
+          parent: $${"projects/" + project_id + "/locations/global"}
           body:
-            contents: ${input_text}
-            sourceLanguageCode: ${detection_result.languages[0].languageCode}
+            contents: $${input_text}
+            sourceLanguageCode: $${detection_result.languages[0].languageCode}
             targetLanguageCode: "en"
             mimeType: "text/plain"
         result: translation_result
 
     - setEnglishText:
         assign:
-          - english_text: ${translation_result.translations[0].translatedText}
+          - english_text: $${translation_result.translations[0].translatedText}
 
     - logEnglishText:
         call: sys.log
         args:
-          text: '${english_text}'
+          text: '$${english_text}'
         next: prepareGeminiRequest
 
     - prepareGeminiRequest:
@@ -140,45 +139,47 @@ main:
               5. Space between words
               6. No punctuation, no newlines
               Return ONLY gloss words in a single line without any extra spaces or newlines
-          - combinedText: ${promptString + " " + english_text}
+          - combinedText: $${promptString + " " + english_text}
         next: callGenerateGloss
 
     - callGenerateGloss:
         call: http.post
         args:
-          url: ${"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + sys.get_env("GEMINI_API_KEY")}
+          url: $${"https://us-central1-aiplatform.googleapis.com/v1/projects/" + project_id + "/locations/us-central1/publishers/google/models/gemini-2.0-flash:generateContent"}
+          auth:
+            type: OAuth2
           headers:
             Content-Type: "application/json"
           body:
             contents:
-              role: "user"
-              parts:
-                - text: ${combinedText}
+              - role: "user"
+                parts:
+                  - text: $${combinedText}
         result: gloss_result
 
     - logGlossRaw:
         call: sys.log
         args:
-          text: '${json.encode_to_string(gloss_result)}'
+          text: '$${json.encode_to_string(gloss_result)}'
 
     - processGlossResult:
         switch:
-          - condition: ${ "body" in gloss_result and "candidates" in gloss_result.body and gloss_result.body.candidates[0].content.parts[0].text != null }
+          - condition: $${ "body" in gloss_result and "candidates" in gloss_result.body and gloss_result.body.candidates[0].content.parts[0].text != null }
             assign:
-              - gloss_text: ${ text.replace_all_regex(gloss_result.body.candidates[0].content.parts[0].text, "\n", "") }
+              - gloss_text: $${ text.replace_all_regex(gloss_result.body.candidates[0].content.parts[0].text, "\n", "") }
             next: logProcessedGloss
-          - condition: ${true}
+          - condition: $${true}
             next: prepareErrorResult
 
     - logProcessedGloss:
         call: sys.log
         args:
-          text: '${gloss_text}'
+          text: '$${gloss_text}'
         next: splitGlossText
 
     - splitGlossText:
         assign:
-          - characters: ${text.split(gloss_text, " ")}
+          - characters: $${text.split(gloss_text, " ")}
         next: initVideoMapping
 
     - initVideoMapping:
@@ -189,23 +190,23 @@ main:
 
     - processMapping:
         switch:
-          - condition: ${current_index < len(characters)}
+          - condition: $${current_index < len(characters)}
             steps:
               - queryVideo:
                   call: http.get
                   args:
-                    url: ${"https://firestore.googleapis.com/v1/projects/genasl/databases/(default)/documents/asl_mappings/" + characters[current_index]}
+                    url: $${"https://firestore.googleapis.com/v1/projects/" + project_id + "/databases/(default)/documents/asl_mappings/" + characters[current_index]}
                     auth:
                       type: OAuth2
                   result: current_result
               - logResponse:
                   call: sys.log
                   args:
-                    text: ${json.encode_to_string(current_result)}
+                    text: $${json.encode_to_string(current_result)}
                   next: processResult
               - processResult:
                   switch:
-                    - condition: ${not("error" in current_result) and "body" in current_result and "fields" in current_result.body}
+                    - condition: $${ not("error" in current_result) and "body" in current_result and "fields" in current_result.body and "metadata" in current_result.body.fields }
                       steps:
                         - addMapping:
                             assign:
@@ -213,13 +214,13 @@ main:
                                   mapValue:
                                     fields:
                                       gloss:
-                                        stringValue: ${characters[current_index]}
+                                        stringValue: $${characters[current_index]}
                                       video_url:
-                                        stringValue: ${current_result.body.fields.metadata.mapValue.fields.video_info.mapValue.fields.public_url.stringValue}
-                              - video_mappings: ${list.concat(video_mappings, [current_mapping])}
-                              - current_index: ${current_index + 1}
+                                        stringValue: $${current_result.body.fields.metadata.mapValue.fields.video_info.mapValue.fields.public_url.stringValue}
+                              - video_mappings: $${list.concat(video_mappings, [current_mapping])}
+                              - current_index: $${current_index + 1}
                             next: processMapping
-                    - condition: ${true}
+                    - condition: $${true}
                       steps:
                         - skipMapping:
                             assign:
@@ -227,31 +228,31 @@ main:
                                   mapValue:
                                     fields:
                                       gloss:
-                                        stringValue: ${characters[current_index]}
+                                        stringValue: $${characters[current_index]}
                                       error:
                                         stringValue: "No video mapping found for gloss"
-                              - video_mappings: ${list.concat(video_mappings, [current_mapping])}
-                              - current_index: ${current_index + 1}
+                              - video_mappings: $${list.concat(video_mappings, [current_mapping])}
+                              - current_index: $${current_index + 1}
                             next: processMapping
-          - condition: ${true}
+          - condition: $${true}
             next: saveSentenceCache
 
     - saveSentenceCache:
         try:
           call: googleapis.firestore.v1.projects.databases.documents.createDocument
           args:
-            parent: ${"projects/" + project_id + "/databases/(default)/documents"}
+            parent: $${"projects/" + project_id + "/databases/(default)/documents"}
             collectionId: "sentence_cache"
-            documentId: ${input_text}
+            documentId: $${input_text}
             body:
               fields:
                 gloss_text: 
-                  stringValue: ${gloss_text}
+                  stringValue: $${gloss_text}
                 video_mappings:
                   arrayValue:
-                    values: ${video_mappings}
+                    values: $${video_mappings}
                 timestamp:
-                  timestampValue: ${time.format(sys.now())}
+                  timestampValue: $${time.format(sys.now())}
           result: save_result
         except:
           as: e
@@ -259,25 +260,24 @@ main:
             - logSaveError:
                 call: sys.log
                 args:
-                  text: '${"Cache save error: " + json.encode_to_string(e)}'
+                  text: '$${"Cache save error: " + json.encode_to_string(e)}'
         next: prepareResult
-
 
     - prepareResult:
         assign:
           - result:
               success: true
               original_input:
-                text: ${input_text}
+                text: $${input_text}
               gloss_response:
-                original_text: ${english_text}
-                gloss: ${gloss_text}
-                characters: ${characters}
+                original_text: $${english_text}
+                gloss: $${gloss_text}
+                characters: $${characters}
               video_response:
-                mappings: ${video_mappings}
-                total_mappings: ${len(video_mappings)}
+                mappings: $${video_mappings}
+                total_mappings: $${len(video_mappings)}
               execution_info:
-                - timestamp: '${time.format(sys.now())}'
+                - timestamp: '$${time.format(sys.now())}'
         next: logSuccess
 
     - logSuccess:
@@ -292,9 +292,9 @@ main:
               success: false
               error: "Failed to generate gloss text"
               original_input:
-                text: ${input_text}
+                text: $${input_text}
               execution_info:
-                - timestamp: '${time.format(sys.now())}'
+                - timestamp: '$${time.format(sys.now())}'
         next: logError
 
     - logError:
@@ -304,7 +304,7 @@ main:
         next: returnResult
 
     - returnResult:
-        return: ${result}
+        return: $${result}
 
     - returnError:
-        return: ${error_response}
+        return: $${error_response}

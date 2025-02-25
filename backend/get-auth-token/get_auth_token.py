@@ -9,21 +9,12 @@ import traceback
 import firebase_admin
 from firebase_admin import credentials, auth
 
-# 初始化Firebase Admin SDK
-cred = credentials.Certificate('firebase-service-account.json')
-firebase_admin.initialize_app(cred)
+# 使用应用默认凭证初始化Firebase Admin SDK
+firebase_admin.initialize_app()
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# Service account that will be impersonated
-TARGET_SERVICE_ACCOUNT = 'project-genasl@genasl.iam.gserviceaccount.com'
-# Required OAuth 2.0 scopes
-SCOPES = [
-    'https://www.googleapis.com/auth/cloud-platform',
-    'https://www.googleapis.com/auth/workflows'
-]
 
 def verify_firebase_token(id_token):
     try:
@@ -35,8 +26,11 @@ def verify_firebase_token(id_token):
         raise
 
 def cors_enabled_function(request):
+    # Get the default credentials and project ID
+    _, project = default()
+    
     headers = {
-        'Access-Control-Allow-Origin': 'https://genasl.web.app',
+        'Access-Control-Allow-Origin': f'https://{project}.web.app',
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type, Authorization',
         'Access-Control-Max-Age': '3600'
@@ -59,7 +53,7 @@ def cors_enabled_function(request):
         decoded_token = verify_firebase_token(firebase_token)
         logger.info(f'Firebase token verified for user: {decoded_token["uid"]}')
         
-        # Get the default credentials that will do the impersonation
+        # Get the default credentials
         credentials, project = default()
         logger.info(f'Using project: {project}')
 
