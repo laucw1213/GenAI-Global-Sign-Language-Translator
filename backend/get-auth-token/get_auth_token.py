@@ -27,7 +27,8 @@ def verify_firebase_token(id_token):
 
 def cors_enabled_function(request):
     # Get the default credentials and project ID
-    _, project = default()
+    credentials, project = default()
+    logger.info(f'Using project: {project}')
     
     headers = {
         'Access-Control-Allow-Origin': f'https://{project}.web.app',
@@ -52,10 +53,6 @@ def cors_enabled_function(request):
         # 驗證Firebase Token
         decoded_token = verify_firebase_token(firebase_token)
         logger.info(f'Firebase token verified for user: {decoded_token["uid"]}')
-        
-        # Get the default credentials
-        credentials, project = default()
-        logger.info(f'Using project: {project}')
 
         # Get a new token with extended scopes
         credentials.refresh(Request())
