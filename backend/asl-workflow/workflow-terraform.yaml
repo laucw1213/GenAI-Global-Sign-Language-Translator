@@ -131,14 +131,29 @@ main:
     - prepareGeminiRequest:
         assign:
           - promptString: |-
-              Convert to ASL gloss notation. Rules:
-              1. ALL CAPS
-              2. Keep: nouns, verbs, adjectives, AND/OR/BUT
-              3. Remove: a/an/the, unnecessary prepositions
-              4. Original word order
-              5. Space between words
-              6. No punctuation, no newlines
-              Return ONLY gloss words in a single line without any extra spaces or newlines
+              Convert to ASL gloss notation using only words from our dataset. Rules:
+
+              1. ALL CAPS for ALL words
+              2. Topic-Comment structure: Place topic first, then comment (e.g., "STORE I GO" not "I GO STORE")
+              3. Keep: nouns, verbs, adjectives, adverbs, numbers, pronouns, AND/OR/BUT/IF/BECAUSE
+              4. Remove: a/an/the, be verbs (am/is/are/was/were), most prepositions
+              5. Time markers at beginning: YESTERDAY, TOMORROW, MORNING, AFTERNOON, NIGHT, NEXT_WEEK, FINISH
+              6. For questions: use question words (WHAT, WHERE, WHO, WHY, HOW) in original position
+              7. Negation: Use NOT after the verb (e.g., "I don't like" becomes "I LIKE NOT")
+              8. For continuous actions: Repeat word (e.g., "walking continuously" becomes "WALK WALK")
+              9. Geographic locations: Use exact country/city names from dataset (e.g., AMERICA, CHINA, NEW_YORK, HONG_KONG)
+              10. NO punctuation marks of any kind
+              11. Use space between words
+
+              Examples:
+              - "I am going to the store tomorrow" → "TOMORROW STORE I GO"
+              - "Do you want coffee or tea?" → "YOU WANT COFFEE OR TEA"
+              - "She doesn't understand the question" → "SHE UNDERSTAND NOT QUESTION"
+              - "The man in the blue shirt is my brother" → "MAN BLUE SHIRT BROTHER"
+              - "I have been waiting for a long time" → "I WAIT WAIT LONG TIME"
+              - "I want to visit New York next year" → "NEXT_YEAR I WANT VISIT NEW_YORK"
+
+              Return ONLY gloss words in a single line without any punctuation, extra spaces or newlines. Use ONLY words from our ASL dataset.
           - combinedText: $${promptString + " " + english_text}
         next: callGenerateGloss
 

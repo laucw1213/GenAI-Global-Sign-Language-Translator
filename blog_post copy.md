@@ -139,10 +139,120 @@ Once the ASL gloss notation is generated, our video mapping algorithm:
 
 3. **Performance Optimization**: Implements local caching of frequent segments, context-based preloading, and streaming optimization to ensure smooth playback.
 
-### ASL Translation Workflow
+### Database Structure
 
-Our core processing pipeline orchestrates the entire translation process through an efficient sequence of operations. The workflow begins by checking the sentence cache in Firestore, quickly retrieving existing translations to improve response time. For non-English inputs, the Cloud Translation API converts text to English, enabling global accessibility for users of any language. 
+Our system uses Firestore collections to store various types of data:
 
-Once in English, Vertex AI (Gemini 2.0 Flash) analyzes the text and transforms it into ASL gloss notation, converting English text to ASL grammar structure following specific linguistic rules. The system then matches each gloss term with corresponding sign language videos from our database, finding the appropriate video clips for each sign in the notation.
+**users Collection**
+```json
+{
+    "profile": {
+        "created_at": "2025-02-19T00:00:00.000Z",
+        "last_active": "2025-02-19T00:00:00.000Z",
+        "usage_count": 0
+    }
+}
+```
 
-These individual segments are combined into a seamless, natural-looking ASL presentation, creating a fluid final ASL video. After successful translation, the system stores both the input text and resulting video reference in Firestore, updating the sentence cache for future use and continuously improving system performance over time.
+**Detailed Description**:
+- `profile`: User profile object
+  - `created_at`: Account creation timestamp
+  - `last_active`: Last activity timestamp
+  - `usage_count`: Service usage counter
+
+Supports anonymous access while tracking basic usage statistics.
+
+**translations Collection**
+```json
+{
+    "user_id": "anonymous_user_id",
+    "timestamp": "2025-02-19T00:00:00.000Z",
+    "input_text": "hello",
+    "output_gloss": "HELLO",
+    "success_status": true,
+    "processing_time": 2.5
+}
+```
+
+**Detailed Description**:
+- `user_id`: User identifier (anonymous or registered)
+- `timestamp`: Translation request time
+- `input_text`: Original user input text
+- `output_gloss`: Generated ASL gloss notation
+- `success_status`: Translation success indicator
+- `processing_time`: Translation duration in seconds
+
+Stores translation history for analysis and system improvement.
+
+**sentence_cache Collection**
+```json
+{
+    "gloss_text": "I WANT BUY COFFEE",
+    "timestamp": "2025-02-14T04:49:17.311Z",
+    "video_mappings": [
+        {
+            "gloss": "I",
+            "video_url": "https://storage.googleapis.com/genasl-video-files/I.mp4"
+        },
+        {
+            "gloss": "WANT",
+            "video_url": "https://storage.googleapis.com/genasl-video-files/WANT.mp4"
+        },
+        {
+            "gloss": "BUY",
+            "video_url": "https://storage.googleapis.com/genasl-video-files/BUY.mp4"
+        },
+        {
+            "gloss": "COFFEE",
+            "video_url": "https://storage.googleapis.com/genasl-video-files/COFFEE.mp4"
+        }
+    ]
+}
+```
+
+**Detailed Description**:
+- `gloss_text`: ASL gloss notation (primary key)
+- `timestamp`: Cache creation/update time
+- `video_mappings`: Sign-to-video mapping array:
+  - `gloss`: Individual ASL sign
+  - `video_url`: Video file URL
+
+Optimizes performance by caching video mappings for quick retrieval.
+
+**asl_mappings Collection**
+```json
+{
+    "category": "general",
+    "created_at": "2024-11-17T07:33:17.349Z",
+    "gloss": "TEST",
+    "metadata": {
+        "format": "video/mp4"
+    },
+    "video_info": {
+        "content_type": "video/mp4",
+        "created": "2024-11-08T13:21:05.823Z",
+        "public_url": "https://storage.googleapis.com/genasl-video-files/TEST.mp4",
+        "size": 286522,
+        "updated": "2024-11-08T13:21:05.823Z"
+    },
+    "video_path": "TEST.mp4"
+}
+```
+
+**Detailed Description**:
+- `category`: Sign category (e.g., "general", "food")
+- `created_at`: Record creation timestamp
+- `gloss`: ASL sign text representation (primary key)
+- `metadata`: Video additional information:
+  - `format`: Video MIME type
+- `video_info`: Video metadata:
+  - `content_type`: Video MIME type
+  - `created`: Video creation time
+  - `public_url`: Public access URL
+  - `size`: File size in bytes
+  - `updated`: Last update time
+- `video_path`: Storage path to video file
+
+Core dictionary that maps ASL signs to video files for scalable sign language representation.
+
+This database design enables efficient data storage and retrieval while optimizing system performance through strategic caching.
