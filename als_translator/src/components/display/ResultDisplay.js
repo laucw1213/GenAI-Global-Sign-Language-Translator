@@ -14,6 +14,11 @@ const VideoPlaylist = ({ videos, originalText }) => {
   const videoPoolSize = 3; // Preload pool size
   const containerRef = useRef(null);
   
+  // Check if video has URL
+  const hasVideoUrl = (video) => {
+    return video.mapValue.fields.video_url && video.mapValue.fields.video_url.stringValue;
+  };
+  
   // Initialize and preload
   useEffect(() => {
     const preloadVideos = async () => {
@@ -21,7 +26,7 @@ const VideoPlaylist = ({ videos, originalText }) => {
       const preloadCount = Math.min(videoPoolSize, videos.length);
       for (let i = 0; i < preloadCount; i++) {
         const video = videoRefs.current[i].current;
-        if (video) {
+        if (video && hasVideoUrl(videos[i])) {
           video.src = videos[i].mapValue.fields.video_url.stringValue;
           // Set the background color of video
           video.style.backgroundColor = '#000';
@@ -29,14 +34,17 @@ const VideoPlaylist = ({ videos, originalText }) => {
         }
       }
       
-      // Start playing first video if autoplay is enabled
-      if (autoplay && videoRefs.current[0].current) {
+      // Start playing first video if autoplay is enabled and it's supported
+      if (autoplay && videoRefs.current[0].current && hasVideoUrl(videos[0])) {
         try {
           await videoRefs.current[0].current.play();
           setIsPlaying(true);
         } catch (error) {
           console.error('Autoplay failed:', error);
         }
+      } else if (autoplay) {
+        // If first video is unsupported, the index change effect will handle it
+        console.log("First video is unsupported, will be handled by index change effect");
       }
     };
 
@@ -76,42 +84,9 @@ const VideoPlaylist = ({ videos, originalText }) => {
     const handleEnded = async () => {
       // Only continue to next video if autoplay is enabled
       if (autoplay) {
-        const nextIndex = (currentVideoIndex + 1) % videos.length;
-        const nextVideo = videoRefs.current[nextIndex].current;
-        
-        if (nextVideo) {
-          // Ensure next video is loaded and ready
-          if (!nextVideo.src) {
-            nextVideo.src = videos[nextIndex].mapValue.fields.video_url.stringValue;
-            nextVideo.style.backgroundColor = '#000';
-            await nextVideo.load();
-          }
-          
-          // Wait for video to be ready
-          if (nextVideo.readyState < 3) {
-            await new Promise(resolve => {
-              nextVideo.addEventListener('canplay', resolve, { once: true });
-            });
-          }
-          
-          try {
-            // Start playing next video immediately
-            await nextVideo.play();
-            nextVideo.playbackRate = playbackSpeed; // Set playback speed for next video
-            setCurrentVideoIndex(nextIndex);
-            
-            // Preload next video in sequence
-            const preloadIndex = (nextIndex + 1) % videos.length;
-            const preloadVideo = videoRefs.current[preloadIndex].current;
-            if (preloadVideo && !preloadVideo.src) {
-              preloadVideo.src = videos[preloadIndex].mapValue.fields.video_url.stringValue;
-              preloadVideo.style.backgroundColor = '#000';
-              preloadVideo.load();
-            }
-          } catch (error) {
-            console.error('Error playing next video:', error);
-          }
-        }
+        console.log(`Video ended at index=${currentVideoIndex}, moving to next`);
+        // Simply call handleNext instead of duplicating logic
+        handleNext();
       } else {
         // Stop playing when current video ends if autoplay is disabled
         setIsPlaying(false);
@@ -144,62 +119,75 @@ const VideoPlaylist = ({ videos, originalText }) => {
     }
   };
 
-  const handleNext = async () => {
-    const nextIndex = (currentVideoIndex + 1) % videos.length;
-    const nextVideo = videoRefs.current[nextIndex].current;
-    
-    if (nextVideo) {
-      if (!nextVideo.src) {
-        nextVideo.src = videos[nextIndex].mapValue.fields.video_url.stringValue;
-        nextVideo.style.backgroundColor = '#000';
-        await nextVideo.load();
-      }
-
-      // Wait for video to be ready
-      if (nextVideo.readyState < 3) {
-        await new Promise(resolve => {
-          nextVideo.addEventListener('canplay', resolve, { once: true });
-        });
-      }
+  // Add debug effect to track state changes
+  useEffect(() => {
+    console.log(`Video state changed: index=${currentVideoIndex}, isPlaying=${isPlaying}, autoplay=${autoplay}`);
+  }, [currentVideoIndex, isPlaying, autoplay]);
+  
+  // Add effect to handle videos when index changes
+  useEffect(() => {
+    // Check if current video is valid
+    if (currentVideoIndex >= 0 && currentVideoIndex < videos.length) {
+      const isCurrentSupported = hasVideoUrl(videos[currentVideoIndex]);
       
-      try {
-        await nextVideo.play();
-        nextVideo.playbackRate = playbackSpeed; // Set playback speed for next video
-        setCurrentVideoIndex(nextIndex);
-        setIsPlaying(true);
-      } catch (error) {
-        console.error('Error playing next video:', error);
+      if (isCurrentSupported) {
+        // If video is supported and autoplay is on, play it
+        if (autoplay) {
+          console.log(`Current video at index=${currentVideoIndex} is supported, playing it`);
+          const currentVideo = videoRefs.current[currentVideoIndex].current;
+          if (currentVideo) {
+            // Ensure video is loaded
+            if (!currentVideo.src) {
+              currentVideo.src = videos[currentVideoIndex].mapValue.fields.video_url.stringValue;
+              currentVideo.style.backgroundColor = '#000';
+              currentVideo.load();
+            }
+            
+            // Play video
+            currentVideo.play()
+              .then(() => {
+                setIsPlaying(true);
+              })
+              .catch(error => {
+                console.error('Error playing video:', error);
+              });
+          }
+        }
+      } else if (autoplay) {
+        // If video is unsupported and autoplay is on, wait 2 seconds then move to next video
+        console.log(`Current video at index=${currentVideoIndex} is unsupported, will skip after delay`);
+        
+        const timeoutId = setTimeout(() => {
+          console.log(`Delay complete for unsupported video at index=${currentVideoIndex}, moving to next`);
+          // Calculate next index
+          const nextIndex = (currentVideoIndex + 1) % videos.length;
+          setCurrentVideoIndex(nextIndex);
+        }, 2000);
+        
+        // Cleanup function
+        return () => clearTimeout(timeoutId);
       }
     }
+  }, [currentVideoIndex, autoplay, videos]);
+
+  const handleNext = () => {
+    const nextIndex = (currentVideoIndex + 1) % videos.length;
+    const isSupported = hasVideoUrl(videos[nextIndex]);
+    
+    console.log(`Moving to next video: index=${nextIndex}, isSupported=${isSupported}, gloss=${videos[nextIndex].mapValue.fields.gloss.stringValue}`);
+    
+    // Simply update the current index - the index change effect will handle playback logic
+    setCurrentVideoIndex(nextIndex);
   };
 
-  const handlePrevious = async () => {
+  const handlePrevious = () => {
     const prevIndex = currentVideoIndex > 0 ? currentVideoIndex - 1 : videos.length - 1;
-    const prevVideo = videoRefs.current[prevIndex].current;
+    const isSupported = hasVideoUrl(videos[prevIndex]);
     
-    if (prevVideo) {
-      if (!prevVideo.src) {
-        prevVideo.src = videos[prevIndex].mapValue.fields.video_url.stringValue;
-        prevVideo.style.backgroundColor = '#000';
-        await prevVideo.load();
-      }
-
-      // Wait for video to be ready
-      if (prevVideo.readyState < 3) {
-        await new Promise(resolve => {
-          prevVideo.addEventListener('canplay', resolve, { once: true });
-        });
-      }
-      
-      try {
-        await prevVideo.play();
-        prevVideo.playbackRate = playbackSpeed; // Set playback speed for previous video
-        setCurrentVideoIndex(prevIndex);
-        setIsPlaying(true);
-      } catch (error) {
-        console.error('Error playing previous video:', error);
-      }
-    }
+    console.log(`Moving to previous video: index=${prevIndex}, isSupported=${isSupported}, gloss=${videos[prevIndex].mapValue.fields.gloss.stringValue}`);
+    
+    // Simply update the current index - the index change effect will handle playback logic
+    setCurrentVideoIndex(prevIndex);
   };
 
   return (
@@ -207,24 +195,42 @@ const VideoPlaylist = ({ videos, originalText }) => {
       <div className="relative w-full" style={{ paddingBottom: '133.33%' }}>
         <div ref={containerRef} className="absolute inset-0 bg-black">
           {/* Video pool */}
-          {videos.map((_, index) => (
-            <div
-              key={index}
-              className="absolute inset-0"
-              style={{
-                visibility: currentVideoIndex === index ? 'visible' : 'hidden',
-                backgroundColor: '#000'
-              }}
-            >
-              <video
-                ref={videoRefs.current[index]}
-                className="rounded-lg w-full h-full object-contain bg-black"
-                playsInline
-                muted
-                preload="auto"
-              />
-            </div>
-          ))}
+          {videos.map((video, index) => {
+            const isSupported = hasVideoUrl(video);
+            
+            return (
+              <div
+                key={index}
+                className="absolute inset-0"
+                style={{
+                  visibility: currentVideoIndex === index ? 'visible' : 'hidden',
+                  backgroundColor: '#000'
+                }}
+              >
+                {isSupported ? (
+                  <video
+                    ref={videoRefs.current[index]}
+                    className="rounded-lg w-full h-full object-contain bg-black"
+                    playsInline
+                    muted
+                    preload="auto"
+                  />
+                ) : (
+                  <div className="flex items-center justify-center h-full">
+                    <div className="text-center p-4">
+                      <div className="text-yellow-500 text-4xl mb-2">⚠️</div>
+                      <div className="text-white text-lg font-bold">
+                        {video.mapValue.fields.gloss.stringValue}
+                      </div>
+                      <div className="text-gray-400 text-sm mt-2">
+                        Unsupported sign
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
           
           {/* Progress bar */}
           <div className="absolute bottom-0 left-0 right-0 bg-gray-200 h-1">
@@ -236,23 +242,29 @@ const VideoPlaylist = ({ videos, originalText }) => {
         </div>
       </div>
 
+      {/* Top row with Loop, sign word, and counter */}
+      <div className="flex items-center justify-between my-3">
+        <button
+          onClick={() => setAutoplay(!autoplay)}
+          className={`flex items-center space-x-1 px-3 py-1.5 rounded-full ${
+            autoplay ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'
+          }`}
+        >
+          <RefreshCcw className="w-4 h-4" />
+          <span className="text-xs font-medium">Loop</span>
+        </button>
+        
+        <span className="text-gray-600 text-base">
+          {videos[currentVideoIndex].mapValue.fields.gloss.stringValue}
+        </span>
+        
+        <span className="text-sm text-gray-500 font-medium">
+          Sign {currentVideoIndex + 1} of {videos.length}
+        </span>
+      </div>
+
       {/* Control buttons */}
-      <div className="mt-4 space-y-4">
-        <div className="flex items-center justify-between">
-          <button
-            onClick={() => setAutoplay(!autoplay)}
-            className={`flex items-center space-x-1 px-3 py-1.5 rounded-full ${
-              autoplay ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'
-            }`}
-          >
-            <RefreshCcw className="w-4 h-4" />
-            <span className="text-xs font-medium">Loop</span>
-          </button>
-          
-          <span className="text-sm text-gray-500 font-medium">
-            Sign {currentVideoIndex + 1} of {videos.length}
-          </span>
-        </div>
+      <div className="mt-2 space-y-4">
 
         {/* Speed control buttons */}
         <div className="flex items-center justify-center space-x-2">
@@ -303,9 +315,9 @@ const VideoPlaylist = ({ videos, originalText }) => {
           </button>
         </div>
 
-        <div className="flex items-center justify-between text-sm text-gray-500 px-2">
-          <Volume2 className="w-4 h-4" />
-          <p className="ml-2 truncate">{originalText}</p>
+        {/* Original text at bottom */}
+        <div className="text-center text-sm text-gray-600 mt-2">
+          <p>{originalText}</p>
         </div>
       </div>
     </div>
@@ -363,6 +375,10 @@ export function ResultDisplay({ result }) {
   }
 
   const originalText = glossResponse?.original_text || originalInput?.text;
+  
+  // 提取不支持的词语
+  const unsupportedWords = videoResponse?.unsupported_words || [];
+  const hasUnsupportedWords = unsupportedWords.length > 0;
 
   return (
     <div className="space-y-4 max-w-full mx-auto">
@@ -393,6 +409,9 @@ export function ResultDisplay({ result }) {
           />
         </ResultCard>
       )}
+
+      {/* 不显示不支持的词语部分，根据用户要求 */}
+
 
       {executionInfo && (
         <div className="text-xs text-gray-400 mt-4 text-center">

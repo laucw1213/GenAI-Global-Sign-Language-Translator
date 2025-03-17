@@ -77,9 +77,19 @@ main:
                 - condition: ${has_cache}
                   steps:
                     - useCache:
-                        assign:
-                          - gloss_text: ${cache_result.fields.gloss_text.stringValue}
-                          - video_mappings: ${cache_result.fields.video_mappings.arrayValue.values}
+                        steps:
+                          - assignBasics:
+                              assign:
+                                - gloss_text: ${cache_result.fields.gloss_text.stringValue}
+                                - video_mappings: ${cache_result.fields.video_mappings.arrayValue.values}
+                          - checkUnsupportedWords:
+                              switch:
+                                - condition: ${"unsupported_words" in cache_result.fields}
+                                  assign:
+                                    - unsupported_words: ${cache_result.fields.unsupported_words.arrayValue.values}
+                                - condition: ${true}
+                                  assign:
+                                    - unsupported_words: []
                         next: prepareResult
                 - condition: ${true}
                   next: callDetectLanguage
@@ -201,6 +211,7 @@ main:
     - initVideoMapping:
         assign:
           - video_mappings: []
+          - unsupported_words: []
           - current_index: 0
         next: processMapping
 
@@ -209,12 +220,19 @@ main:
           - condition: ${current_index < len(characters)}
             steps:
               - queryVideo:
-                  call: http.get
-                  args:
-                    url: ${"https://firestore.googleapis.com/v1/projects/" + project_id + "/databases/(default)/documents/asl_mappings/" + characters[current_index]}
-                    auth:
-                      type: OAuth2
-                  result: current_result
+                  try:
+                    call: http.get
+                    args:
+                      url: ${"https://firestore.googleapis.com/v1/projects/" + project_id + "/databases/(default)/documents/asl_mappings/" + characters[current_index]}
+                      auth:
+                        type: OAuth2
+                    result: current_result
+                  except:
+                    as: e
+                    steps:
+                      - handleQueryError:
+                          assign:
+                            - current_result: {"error": '${e}'}
               - logResponse:
                   call: sys.log
                   args:
@@ -239,16 +257,26 @@ main:
                     - condition: ${true}
                       steps:
                         - skipMapping:
-                            assign:
-                              - current_mapping:
-                                  mapValue:
-                                    fields:
-                                      gloss:
-                                        stringValue: ${characters[current_index]}
-                                      error:
-                                        stringValue: "No video mapping found for gloss"
-                              - video_mappings: ${list.concat(video_mappings, [current_mapping])}
-                              - current_index: ${current_index + 1}
+                            steps:
+                              - createMappings:
+                                  assign:
+                                    - current_mapping:
+                                        mapValue:
+                                          fields:
+                                            gloss:
+                                              stringValue: ${characters[current_index]}
+                                            error:
+                                              stringValue: "No video mapping found for gloss"
+                                    - unsupported_word:
+                                        mapValue:
+                                          fields:
+                                            gloss:
+                                              stringValue: ${characters[current_index]}
+                              - updateArrays:
+                                  assign:
+                                    - video_mappings: ${list.concat(video_mappings, [current_mapping])}
+                                    - unsupported_words: ${list.concat(unsupported_words, [unsupported_word])}
+                                    - current_index: ${current_index + 1}
                             next: processMapping
           - condition: ${true}
             next: saveSentenceCache
@@ -268,6 +296,9 @@ main:
                 video_mappings:
                   arrayValue:
                     values: ${video_mappings}
+                unsupported_words:
+                  arrayValue:
+                    values: ${unsupported_words}
                 timestamp:
                   timestampValue: ${time.format(sys.now())}
           result: save_result
@@ -293,6 +324,8 @@ main:
               video_response:
                 mappings: ${video_mappings}
                 total_mappings: ${len(video_mappings)}
+                unsupported_words: ${unsupported_words}
+                total_unsupported: ${len(unsupported_words)}
               execution_info:
                 - timestamp: '${time.format(sys.now())}'
         next: logSuccess
@@ -306,7 +339,7 @@ main:
     - prepareErrorResult:
         assign:
           - result:
-              success: false
+              success: true
               error: "Failed to generate gloss text"
               original_input:
                 text: ${input_text}
