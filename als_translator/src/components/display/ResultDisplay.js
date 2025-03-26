@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { PlayCircle, PauseCircle, SkipForward, SkipBack, Volume2, RefreshCcw } from "lucide-react";
+import { PlayCircle, PauseCircle, SkipForward, SkipBack, RefreshCcw } from "lucide-react";
 
 const VideoPlaylist = ({ videos, originalText }) => {
   const [currentVideoIndex, setCurrentVideoIndex] = useState(0);
@@ -16,7 +16,7 @@ const VideoPlaylist = ({ videos, originalText }) => {
   
   // Check if video has URL
   const hasVideoUrl = (video) => {
-    return video.mapValue.fields.video_url && video.mapValue.fields.video_url.stringValue;
+    return video.video_url && video.video_url;
   };
   
   // Initialize and preload
@@ -27,7 +27,7 @@ const VideoPlaylist = ({ videos, originalText }) => {
       for (let i = 0; i < preloadCount; i++) {
         const video = videoRefs.current[i].current;
         if (video && hasVideoUrl(videos[i])) {
-          video.src = videos[i].mapValue.fields.video_url.stringValue;
+          video.src = videos[i].video_url;
           // Set the background color of video
           video.style.backgroundColor = '#000';
           await video.load();
@@ -74,7 +74,7 @@ const VideoPlaylist = ({ videos, originalText }) => {
         const nextIndex = (currentVideoIndex + 1) % videos.length;
         const nextVideo = videoRefs.current[nextIndex].current;
         if (nextVideo && !nextVideo.src) {
-          nextVideo.src = videos[nextIndex].mapValue.fields.video_url.stringValue;
+          nextVideo.src = videos[nextIndex].video_url;
           nextVideo.style.backgroundColor = '#000';
           nextVideo.load();
         }
@@ -138,7 +138,7 @@ const VideoPlaylist = ({ videos, originalText }) => {
           if (currentVideo) {
             // Ensure video is loaded
             if (!currentVideo.src) {
-              currentVideo.src = videos[currentVideoIndex].mapValue.fields.video_url.stringValue;
+              currentVideo.src = videos[currentVideoIndex].video_url;
               currentVideo.style.backgroundColor = '#000';
               currentVideo.load();
             }
@@ -174,7 +174,7 @@ const VideoPlaylist = ({ videos, originalText }) => {
     const nextIndex = (currentVideoIndex + 1) % videos.length;
     const isSupported = hasVideoUrl(videos[nextIndex]);
     
-    console.log(`Moving to next video: index=${nextIndex}, isSupported=${isSupported}, gloss=${videos[nextIndex].mapValue.fields.gloss.stringValue}`);
+    console.log(`Moving to next video: index=${nextIndex}, isSupported=${isSupported}, gloss=${videos[nextIndex].gloss}`);
     
     // Simply update the current index - the index change effect will handle playback logic
     setCurrentVideoIndex(nextIndex);
@@ -184,7 +184,7 @@ const VideoPlaylist = ({ videos, originalText }) => {
     const prevIndex = currentVideoIndex > 0 ? currentVideoIndex - 1 : videos.length - 1;
     const isSupported = hasVideoUrl(videos[prevIndex]);
     
-    console.log(`Moving to previous video: index=${prevIndex}, isSupported=${isSupported}, gloss=${videos[prevIndex].mapValue.fields.gloss.stringValue}`);
+    console.log(`Moving to previous video: index=${prevIndex}, isSupported=${isSupported}, gloss=${videos[prevIndex].gloss}`);
     
     // Simply update the current index - the index change effect will handle playback logic
     setCurrentVideoIndex(prevIndex);
@@ -220,7 +220,7 @@ const VideoPlaylist = ({ videos, originalText }) => {
                     <div className="text-center p-4">
                       <div className="text-yellow-500 text-4xl mb-2">⚠️</div>
                       <div className="text-white text-lg font-bold">
-                        {video.mapValue.fields.gloss.stringValue}
+                        {video.gloss}
                       </div>
                       <div className="text-gray-400 text-sm mt-2">
                         Unsupported sign
@@ -255,7 +255,7 @@ const VideoPlaylist = ({ videos, originalText }) => {
         </button>
         
         <span className="text-gray-600 text-base">
-          {videos[currentVideoIndex].mapValue.fields.gloss.stringValue}
+          {videos[currentVideoIndex].gloss}
         </span>
         
         <span className="text-sm text-gray-500 font-medium">
@@ -355,15 +355,15 @@ const ResultCard = ({ title, children, indicator = "indigo" }) => (
 );
 
 export function ResultDisplay({ result }) {
-  if (!result || !Array.isArray(result)) return null;
+  if (!result) return null;
 
-  const successInfo = result.find(item => 'success' in item);
-  const originalInput = result.find(item => 'original_input' in item)?.original_input;
-  const glossResponse = result.find(item => 'gloss_response' in item)?.gloss_response;
-  const videoResponse = result.find(item => 'video_response' in item)?.video_response;
-  const executionInfo = result.find(item => 'execution_info' in item)?.execution_info;
+  // 提取字段
+  const { original_input, videos } = result;
+  
+  // 获取原始文本
+  const original_text = typeof original_input === 'object' ? original_input.text : original_input;
 
-  if (!successInfo?.success) {
+  if (result.error) {
     return (
       <div className="mt-4 p-4 bg-red-50 text-red-600 rounded-lg">
         <h3 className="font-semibold mb-2">Processing Failed</h3>
@@ -374,49 +374,13 @@ export function ResultDisplay({ result }) {
     );
   }
 
-  const originalText = glossResponse?.original_text || originalInput?.text;
-  
-  // 提取不支持的词语
-  const unsupportedWords = videoResponse?.unsupported_words || [];
-  const hasUnsupportedWords = unsupportedWords.length > 0;
-
   return (
-    <div className="space-y-4 max-w-full mx-auto">
-      {(originalText || originalInput?.audio_path) && (
-        <ResultCard title="Original Input" indicator="indigo">
-          <div>
-            {originalText && (
-              <p className="text-gray-700 break-words">
-                {originalText}
-              </p>
-            )}
-            
-            {originalInput?.audio_path && (
-              <AudioPlayer audioPath={originalInput.audio_path} />
-            )}
-          </div>
-        </ResultCard>
-      )}
-
-      {videoResponse?.mappings && videoResponse.mappings.length > 0 && (
-        <ResultCard 
-          title={`Sign Language Videos (${videoResponse.total_mappings} signs)`} 
-          indicator="green"
-        >
-          <VideoPlaylist 
-            videos={videoResponse.mappings.map(video => Array.isArray(video) ? video[0] : video)} 
-            originalText={originalText}
-          />
-        </ResultCard>
-      )}
-
-      {/* 不显示不支持的词语部分，根据用户要求 */}
-
-
-      {executionInfo && (
-        <div className="text-xs text-gray-400 mt-4 text-center">
-          Processed at: {executionInfo[1]?.timestamp || videoResponse?.timestamp}
-        </div>
+    <div className="max-w-full mx-auto">
+      {videos && videos.length > 0 && (
+        <VideoPlaylist 
+          videos={videos.map(v => v[0])} 
+          originalText={original_text}
+        />
       )}
     </div>
   );

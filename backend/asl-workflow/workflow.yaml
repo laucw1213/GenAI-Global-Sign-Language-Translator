@@ -3,7 +3,7 @@ main:
   steps:
     - init:
         assign:
-          - error_response: { error: "Input not provided", timestamp: '${time.format(sys.now())}' }
+          - error_response: { success: false, error: "Input not provided", timestamp: '${time.format(sys.now())}' }
           - timestamp: '${time.format(sys.now())}'
           - project_id: ${sys.get_env("GOOGLE_CLOUD_PROJECT_ID")}
 
@@ -82,14 +82,7 @@ main:
                               assign:
                                 - gloss_text: ${cache_result.fields.gloss_text.stringValue}
                                 - video_mappings: ${cache_result.fields.video_mappings.arrayValue.values}
-                          - checkUnsupportedWords:
-                              switch:
-                                - condition: ${"unsupported_words" in cache_result.fields}
-                                  assign:
-                                    - unsupported_words: ${cache_result.fields.unsupported_words.arrayValue.values}
-                                - condition: ${true}
-                                  assign:
-                                    - unsupported_words: []
+                                - english_text: ${input_text}
                         next: prepareResult
                 - condition: ${true}
                   next: callDetectLanguage
@@ -211,7 +204,6 @@ main:
     - initVideoMapping:
         assign:
           - video_mappings: []
-          - unsupported_words: []
           - current_index: 0
         next: processMapping
 
@@ -223,7 +215,7 @@ main:
                   try:
                     call: http.get
                     args:
-                      url: ${"https://firestore.googleapis.com/v1/projects/" + project_id + "/databases/(default)/documents/asl_mappings/" + characters[current_index]}
+                      url: ${"https://firestore.googleapis.com/v1/projects/" + project_id + "/databases/(default)/documents/asl_mappings2/" + characters[current_index]}
                       auth:
                         type: OAuth2
                     result: current_result
@@ -240,7 +232,7 @@ main:
                   next: processResult
               - processResult:
                   switch:
-                    - condition: ${ not("error" in current_result) and "body" in current_result and "fields" in current_result.body and "metadata" in current_result.body.fields }
+                    - condition: ${ not("error" in current_result) and "body" in current_result and "fields" in current_result.body and "video_url" in current_result.body.fields }
                       steps:
                         - addMapping:
                             assign:
@@ -250,8 +242,8 @@ main:
                                       gloss:
                                         stringValue: ${characters[current_index]}
                                       video_url:
-                                        stringValue: ${current_result.body.fields.metadata.mapValue.fields.video_info.mapValue.fields.public_url.stringValue}
-                              - video_mappings: ${list.concat(video_mappings, [current_mapping])}
+                                        stringValue: ${current_result.body.fields.video_url.stringValue}
+                              - video_mappings: ${list.concat(video_mappings, current_mapping)}
                               - current_index: ${current_index + 1}
                             next: processMapping
                     - condition: ${true}
@@ -267,15 +259,9 @@ main:
                                               stringValue: ${characters[current_index]}
                                             error:
                                               stringValue: "No video mapping found for gloss"
-                                    - unsupported_word:
-                                        mapValue:
-                                          fields:
-                                            gloss:
-                                              stringValue: ${characters[current_index]}
                               - updateArrays:
                                   assign:
-                                    - video_mappings: ${list.concat(video_mappings, [current_mapping])}
-                                    - unsupported_words: ${list.concat(unsupported_words, [unsupported_word])}
+                                    - video_mappings: ${list.concat(video_mappings, current_mapping)}
                                     - current_index: ${current_index + 1}
                             next: processMapping
           - condition: ${true}
@@ -296,9 +282,6 @@ main:
                 video_mappings:
                   arrayValue:
                     values: ${video_mappings}
-                unsupported_words:
-                  arrayValue:
-                    values: ${unsupported_words}
                 timestamp:
                   timestampValue: ${time.format(sys.now())}
           result: save_result
@@ -312,23 +295,44 @@ main:
         next: prepareResult
 
     - prepareResult:
-        assign:
-          - result:
-              success: true
-              original_input:
-                text: ${input_text}
-              gloss_response:
-                original_text: ${english_text}
-                gloss: ${gloss_text}
-                characters: ${characters}
-              video_response:
-                mappings: ${video_mappings}
-                total_mappings: ${len(video_mappings)}
-                unsupported_words: ${unsupported_words}
-                total_unsupported: ${len(unsupported_words)}
-              execution_info:
-                - timestamp: '${time.format(sys.now())}'
-        next: logSuccess
+        steps:
+          - initSimplifiedArrays:
+              assign:
+                - simplified_videos: []
+                - video_index: 0
+          - processVideos:
+              switch:
+                - condition: ${video_index < len(video_mappings)}
+                  steps:
+                    - extractVideoData:
+                        steps:
+                          - checkVideoUrl:
+                              assign:
+                                - has_video_url: ${"video_url" in video_mappings[video_index].mapValue.fields}
+                                - video_url_value: ""
+                          - setVideoUrl:
+                              switch:
+                                - condition: ${has_video_url}
+                                  assign:
+                                    - video_url_value: ${video_mappings[video_index].mapValue.fields.video_url.stringValue}
+                          - createVideoObject:
+                              assign:
+                                - current_video:
+                                    gloss: ${video_mappings[video_index].mapValue.fields.gloss.stringValue}
+                                    video_url: ${video_url_value}
+                                - simplified_videos: ${list.concat(simplified_videos, [current_video])}
+                                - video_index: ${video_index + 1}
+                    - continueVideoLoop:
+                        next: processVideos
+                - condition: ${true}
+                  next: createResult
+          - createResult:
+              assign:
+                - result:
+                    original_input: ${input_text}
+                    gloss: ${gloss_text}
+                    videos: ${simplified_videos}
+              next: logSuccess
 
     - logSuccess:
         call: sys.log
@@ -339,12 +343,10 @@ main:
     - prepareErrorResult:
         assign:
           - result:
-              success: true
+              success: false
               error: "Failed to generate gloss text"
-              original_input:
-                text: ${input_text}
-              execution_info:
-                - timestamp: '${time.format(sys.now())}'
+              original_input: ${input_text}
+              timestamp: '${time.format(sys.now())}'
         next: logError
 
     - logError:

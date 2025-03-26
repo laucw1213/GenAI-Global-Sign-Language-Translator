@@ -15,7 +15,7 @@ class ASLFirestoreSetup:
     def __init__(self):
         self.db = firestore.Client()
         self.storage_client = storage.Client()
-        self.bucket = self.storage_client.bucket('genasl2-video-files')
+        self.bucket = self.storage_client.bucket('genasl-video-files')
         self.batch_size = 500
 
     def process_doc_for_json(self, doc_dict):
@@ -24,44 +24,9 @@ class ASLFirestoreSetup:
         for key, value in doc_dict.items():
             if hasattr(value, 'isoformat'):
                 processed[key] = value.isoformat()
-            elif isinstance(value, dict):
-                processed[key] = self.process_doc_for_json(value)
             else:
                 processed[key] = value
         return processed
-
-    def get_video_metadata(self, blob):
-        """獲取影片的元數據"""
-        try:
-            metadata = {
-                'content_type': blob.content_type,
-                'size': blob.size,
-                'created': blob.time_created.isoformat() if blob.time_created else None,
-                'updated': blob.updated.isoformat() if blob.updated else None,
-                'public_url': f"https://storage.googleapis.com/{self.bucket.name}/{blob.name}"
-            }
-            return metadata
-        except Exception as e:
-            logging.warning(f"Error getting metadata for {blob.name}: {str(e)}")
-            return {}
-
-    def determine_category(self, gloss):
-        """確定 ASL 手語的類別"""
-        # 基本類別判斷規則
-        if len(gloss) == 1 and gloss.isalpha():
-            return 'alphabet'
-        elif any(num in gloss for num in ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EIGHT', 'NINE', 'TEN']):
-            return 'numbers'
-        elif gloss in {'RED', 'BLUE', 'GREEN', 'YELLOW', 'BLACK', 'WHITE', 'PURPLE', 'BROWN', 'PINK', 'ORANGE'}:
-            return 'colors'
-        elif gloss in {'HAPPY', 'SAD', 'ANGRY', 'LOVE', 'HATE', 'AFRAID', 'EXCITED', 'TIRED', 'HUNGRY'}:
-            return 'emotions'
-        elif gloss in {'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY',
-                      'MONTH', 'WEEK', 'YEAR', 'DAY', 'MORNING', 'AFTERNOON', 'EVENING', 'NIGHT'}:
-            return 'time'
-        elif gloss in {'HELLO', 'GOODBYE', 'PLEASE', 'THANK', 'SORRY', 'YES', 'NO'}:
-            return 'common'
-        return 'general'
 
     def process_videos(self):
         """處理所有視頻文件並添加到 Firestore"""
@@ -79,20 +44,13 @@ class ASLFirestoreSetup:
 
                 try:
                     gloss = blob.name.replace('.mp4', '').upper()
-                    category = self.determine_category(gloss)
                     
                     data = {
-                        'video_path': blob.name,
-                        'created_at': datetime.now(),
                         'gloss': gloss,
-                        'category': category,
-                        'metadata': {
-                            'video_info': self.get_video_metadata(blob),
-                            'format': 'video/mp4'
-                        }
+                        'video_url': f"https://storage.googleapis.com/{self.bucket.name}/{blob.name}"
                     }
 
-                    doc_ref = self.db.collection('asl_mappings').document(gloss)
+                    doc_ref = self.db.collection('asl_mappings2').document(gloss)
                     batch.set(doc_ref, data)
                     count += 1
                     processed += 1
@@ -125,14 +83,14 @@ class ASLFirestoreSetup:
             results = []
             
             for gloss in sample_glosses:
-                doc_ref = self.db.collection('asl_mappings').document(gloss)
+                doc_ref = self.db.collection('asl_mappings2').document(gloss)
                 doc = doc_ref.get()
                 if doc.exists:
-                    doc_dict = self.process_doc_for_json(doc.to_dict())
+                    doc_dict = doc.to_dict()
                     results.append({
                         'gloss': gloss,
                         'status': 'found',
-                        'data': doc_dict
+                        'video_url': doc_dict.get('video_url', 'Not found')
                     })
                 else:
                     results.append({

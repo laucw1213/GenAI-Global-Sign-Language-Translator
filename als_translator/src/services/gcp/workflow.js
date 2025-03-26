@@ -82,7 +82,7 @@ const useWorkflow = (token, refreshToken, user, recordTranslation) => {
       if (response.data?.name) {
         const executionResult = await checkExecutionStatus(response.data.name);
         const parsedResult = JSON.parse(executionResult);
-        setResult([parsedResult]);
+        setResult(parsedResult);
 
         const processingTime = (Date.now() - startTime) / 1000; // 轉換為秒
 
