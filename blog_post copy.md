@@ -222,36 +222,15 @@ Optimizes performance by caching video mappings for quick retrieval.
 **asl_mappings Collection**
 ```json
 {
-    "category": "general",
-    "created_at": "2024-11-17T07:33:17.349Z",
+
     "gloss": "TEST",
-    "metadata": {
-        "format": "video/mp4"
-    },
-    "video_info": {
-        "content_type": "video/mp4",
-        "created": "2024-11-08T13:21:05.823Z",
-        "public_url": "https://storage.googleapis.com/genasl-video-files/TEST.mp4",
-        "size": 286522,
-        "updated": "2024-11-08T13:21:05.823Z"
-    },
-    "video_path": "TEST.mp4"
+    "video_url": "https://storage.googleapis.com/genasl-video-files/TEST.mp4"
 }
 ```
 
 **Detailed Description**:
-- `category`: Sign category (e.g., "general", "food")
-- `created_at`: Record creation timestamp
 - `gloss`: ASL sign text representation (primary key)
-- `metadata`: Video additional information:
-  - `format`: Video MIME type
-- `video_info`: Video metadata:
-  - `content_type`: Video MIME type
-  - `created`: Video creation time
-  - `public_url`: Public access URL
-  - `size`: File size in bytes
-  - `updated`: Last update time
-- `video_path`: Storage path to video file
+- `video_url`: Video URL
 
 Core dictionary that maps ASL signs to video files for scalable sign language representation.
 
