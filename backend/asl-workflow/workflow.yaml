@@ -137,16 +137,15 @@ main:
               Convert to ASL gloss notation using only words from our dataset. Rules:
 
               1. ALL CAPS for ALL words
-              2. Topic-Comment structure: Place topic first, then comment (e.g., "STORE I GO" not "I GO STORE")
-              3. Keep: nouns, verbs, adjectives, adverbs, numbers, pronouns, AND/OR/BUT/IF/BECAUSE
-              4. Remove: a/an/the, be verbs (am/is/are/was/were), most prepositions
-              5. Time markers at beginning: YESTERDAY, TOMORROW, MORNING, AFTERNOON, NIGHT, NEXT_WEEK, FINISH
-              6. For questions: use question words (WHAT, WHERE, WHO, WHY, HOW) in original position
-              7. Negation: Use NOT after the verb (e.g., "I don't like" becomes "I LIKE NOT")
-              8. For continuous actions: Repeat word (e.g., "walking continuously" becomes "WALK WALK")
-              9. Geographic locations: Use exact country/city names from dataset (e.g., AMERICA, CHINA, NEW_YORK, HONG_KONG)
-              10. NO punctuation marks of any kind
-              11. Use space between words
+              2. Keep: nouns, verbs, adjectives, adverbs, numbers, pronouns, AND/OR/BUT/IF/BECAUSE
+              3. Remove: a/an/the, be verbs (am/is/are/was/were), most prepositions
+              4. Time markers at beginning: YESTERDAY, TOMORROW, MORNING, AFTERNOON, NIGHT, NEXT_WEEK, FINISH
+              5. For questions: use question words (WHAT, WHERE, WHO, WHY, HOW) in original position
+              6. Negation: Use NOT after the verb (e.g., "I don't like" becomes "I LIKE NOT")
+              7. For continuous actions: Repeat word (e.g., "walking continuously" becomes "WALK WALK")
+              8. Geographic locations: Use exact country/city names from dataset (e.g., AMERICA, CHINA, NEW_YORK, HONG_KONG)
+              9. NO punctuation marks of any kind
+              10. Use space between words
 
               Examples:
               - "I am going to the store tomorrow" → "TOMORROW STORE I GO"
@@ -213,26 +212,27 @@ main:
             steps:
               - queryVideo:
                   try:
-                    call: http.get
+                    call: googleapis.firestore.v1.projects.databases.documents.get
                     args:
-                      url: ${"https://firestore.googleapis.com/v1/projects/" + project_id + "/databases/(default)/documents/asl_mappings2/" + characters[current_index]}
-                      auth:
-                        type: OAuth2
+                      name: ${"projects/" + project_id + "/databases/(default)/documents/asl_mappings2/" + characters[current_index]}
                     result: current_result
                   except:
                     as: e
                     steps:
                       - handleQueryError:
                           assign:
-                            - current_result: {"error": '${e}'}
-              - logResponse:
+                            # Assign an object with an 'error' field to mimic the structure checked later
+                            - current_result: { "error": '${"Firestore get error: " + json.encode_to_string(e)}' }
+                  next: logResponse # Point to the added logResponse step
+              - logResponse: # Added logResponse step back
                   call: sys.log
                   args:
                     text: ${json.encode_to_string(current_result)}
                   next: processResult
               - processResult:
                   switch:
-                    - condition: ${ not("error" in current_result) and "body" in current_result and "fields" in current_result.body and "video_url" in current_result.body.fields }
+                    # Check for error field first, then check the structure from the connector result
+                    - condition: ${ not("error" in current_result) and "fields" in current_result and "video_url" in current_result.fields }
                       steps:
                         - addMapping:
                             assign:
@@ -242,7 +242,8 @@ main:
                                       gloss:
                                         stringValue: ${characters[current_index]}
                                       video_url:
-                                        stringValue: ${current_result.body.fields.video_url.stringValue}
+                                        # Access fields directly from current_result
+                                        stringValue: ${current_result.fields.video_url.stringValue}
                               - video_mappings: ${list.concat(video_mappings, current_mapping)}
                               - current_index: ${current_index + 1}
                             next: processMapping
