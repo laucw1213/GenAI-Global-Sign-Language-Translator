@@ -149,20 +149,14 @@ When the system processes a sentence for the first time or cannot find a corresp
 
 1.  **Receive Input**: Receives user text input. **Input:** `args` (e.g., `{"text": "我想買咖啡"}`). **Output:** `input_text` ("我想買咖啡"). (YAML: `main`, `validateInput`)
     ```yaml
-    # workflow.yaml snippet (Input Handling)
-    main:
-      params: [args]
-      steps:
-        - init:
+    # workflow.yaml snippet (Input Validation)
+    - validateInput:
+        switch:
+          - condition: ${"text" in args}
             assign:
-              # ... initialization ...
-        - validateInput:
-            switch:
-              - condition: ${"text" in args}
-                assign:
-                  - input_text: ${args.text}
-                next: logInput # Or next processing step
-              # ... error handling ...
+              - input_text: ${args.text} # Output
+            next: logInput
+          # ...
     ```
     ```json
     // Example: Chinese Input Log
@@ -185,16 +179,12 @@ When the system processes a sentence for the first time or cannot find a corresp
         try:
           call: googleapis.firestore.v1.projects.databases.documents.get
           args:
-            name: ${"projects/" + project_id + "/databases/(default)/documents/sentence_cache/" + input_text}
-          result: cache_result
+            name: ${... + input_text} # Input
+          result: cache_result # Output (null on miss)
         except:
-          as: e
+          # ... handles error, proceeds to next step ...
           steps:
-            - logCacheError: # Log the error
-                call: sys.log
-                args:
-                  text: '${"Cache check error: " + json.encode_to_string(e)}'
-            - continueToLangDetect: # Proceed to next step
+            - continueToLangDetect:
                 next: callDetectLanguage
     ```
     ```json
@@ -202,15 +192,7 @@ When the system processes a sentence for the first time or cannot find a corresp
     {
       "textPayload": {
         "message_prefix": "Cache check error: ",
-        "error_details": {
-          "body": {
-            "error": {
-              "code": 404,
-              "message": "Document \"projects/genasl/databases/(default)/documents/sentence_cache/我想買咖啡\" not found.",
-              "status": "NOT_FOUND"
-            }
-          }
-        }
+        "error_details": { /* ... 404 details ... */ }
       },
       "timestamp": "2025-03-29T18:00:45.843691192Z"
     }
@@ -222,11 +204,9 @@ When the system processes a sentence for the first time or cannot find a corresp
     - callDetectLanguage:
         call: googleapis.translate.v3.projects.locations.detectLanguage
         args:
-          parent: ${"projects/" + project_id + "/locations/global"}
           body:
-            content: ${input_text}
-            mimeType: "text/plain"
-        result: detection_result
+            content: ${input_text} # Input
+        result: detection_result # Output
     ```
     ```json
     // Example: Detected Traditional Chinese
@@ -242,29 +222,25 @@ When the system processes a sentence for the first time or cannot find a corresp
     - translateIfNeeded:
         switch:
           - condition: ${detection_result.languages[0].languageCode == "en"}
-            assign:
-              - english_text: ${input_text} # Assign original if English
-            next: logEnglishText
+            # ... skip ...
           - condition: ${true} # If not English
             next: callTranslateText
     - callTranslateText:
         call: googleapis.translate.v3.projects.locations.translateText
         args:
-          parent: ${"projects/" + project_id + "/locations/global"}
           body:
-            contents: ${input_text}
-            sourceLanguageCode: ${detection_result.languages[0].languageCode}
-            targetLanguageCode: "en"
-            mimeType: "text/plain"
-        result: translation_result
+            contents: ${input_text} # Input
+            sourceLanguageCode: ${detection_result.languages[0].languageCode} # Input
+            # ...
+        result: translation_result # Intermediate Output
     - setEnglishText:
         assign:
-          - english_text: ${translation_result.translations[0].translatedText}
+          - english_text: ${translation_result.translations[0].translatedText} # Output
     ```
     ```json
     // Example: Chinese input translated to English
     {
-      "textPayload": "I want to buy coffee", // "我想買咖啡" -> "I want to buy coffee"
+      "textPayload": "I want to buy coffee",
       "timestamp": "2025-03-29T18:00:46.904554817Z"
     }
     ```
@@ -274,60 +250,31 @@ When the system processes a sentence for the first time or cannot find a corresp
     # workflow.yaml snippet (Gemini Call & Processing)
     - prepareGeminiRequest:
         assign:
-          # ... promptString assignment ...
-          - combinedText: ${promptString + " " + english_text}
-        next: callGenerateGloss
+          - combinedText: ${promptString + " " + english_text} # Input for next step
     - callGenerateGloss:
         call: http.post
         args:
-          url: ${"https://us-central1-aiplatform.googleapis.com/v1/projects/" + project_id + "/locations/us-central1/publishers/google/models/gemini-2.0-flash:generateContent"}
-          auth:
-            type: OAuth2
           body:
             contents:
-              - role: "user"
-                parts:
-                  - text: ${combinedText}
-        result: gloss_result
+              - parts:
+                  - text: ${combinedText} # Input
+        result: gloss_result # Intermediate Output
     - processGlossResult:
         switch:
-          - condition: ${ "body" in gloss_result and "candidates" in gloss_result.body and gloss_result.body.candidates[0].content.parts[0].text != null }
+          - condition: ${...} # Check valid response
             assign:
-              # Extract and clean the gloss text
-              - gloss_text: ${ text.replace_all_regex(gloss_result.body.candidates[0].content.parts[0].text, "\n", "") }
-            next: logProcessedGloss
-          # ... error handling ...
+              - gloss_text: ${...} # Output (Extracted Gloss)
+            # ...
     ```
     ```json
     // Example: Gemini API Response (from Chinese input workflow)
     {
       "textPayload": {
         "body": {
-          "candidates": [
-            {
-              "content": {
-                "parts": [
-                  {
-                    // System extracts Gloss text from here
-                    "text": "I WANT BUY COFFEE\n"
-                  }
-                ],
-                "role": "model"
-              },
-              "finishReason": "STOP",
-              "avgLogprobs": -0.000014902092516422272
-            }
-          ],
-          "usageMetadata": {
-            "promptTokenCount": 384,
-            "candidatesTokenCount": 5,
-            "totalTokenCount": 389
-            // ... other metadata ...
-          }
-          // ... other response metadata ...
+          "candidates": [ { "content": { "parts": [ { "text": "I WANT BUY COFFEE\n" } ] }, /* ... */ } ],
+          /* ... */
         },
-        "code": 200,
-        "headers": { /* ... Headers ... */ }
+        /* ... */
       },
       "timestamp": "2025-03-29T18:00:47.551136861Z"
     }
@@ -339,81 +286,48 @@ When the system processes a sentence for the first time or cannot find a corresp
     # workflow.yaml snippet (Video Mapping Loop - Query & Add)
     - splitGlossText:
         assign:
-          - characters: ${text.split(gloss_text, " ")}
-        next: initVideoMapping
-    - initVideoMapping:
-        assign:
-          - video_mappings: []
-          - current_index: 0
-        next: processMapping
+          - characters: ${text.split(gloss_text, " ")} # Input for loop
     - processMapping:
         switch:
           - condition: ${current_index < len(characters)}
             steps:
               - queryVideo:
-                  try:
-                    call: googleapis.firestore.v1.projects.databases.documents.get
-                    args:
-                      name: ${"projects/" + project_id + "/databases/(default)/documents/asl_mappings2/" + characters[current_index]}
-                    result: current_result
-                  # ... error handling ...
-              - processResult:
-                  switch:
-                    - condition: ${ not("error" in current_result) and ... }
-                      steps:
-                        - addMapping:
-                            assign:
-                              - current_mapping: { /* ... construct mapping ... */ }
-                              - video_mappings: ${list.concat(video_mappings, current_mapping)}
-                              - current_index: ${current_index + 1}
-                            next: processMapping # Loop back
-                    # ... handle missing mapping ...
-          - condition: ${true}
-            next: saveSentenceCache # Exit loop
+                  call: googleapis.firestore.v1.projects.databases.documents.get
+                  args:
+                    name: ${... + characters[current_index]} # Input (current gloss)
+                  result: current_result # Intermediate Output
+              - addMapping:
+                  assign:
+                    - video_mappings: ${list.concat(video_mappings, current_mapping)} # Output (growing list)
+                    # ... increment index ...
+                  next: processMapping
+          # ...
     ```
     ```json
     // Example: Looking up video URL for Gloss "I"
     {
-      "textPayload": {
-        "createTime": "2025-03-25T19:51:19.599373Z",
-        "fields": {
-          "gloss": { "stringValue": "I" },
-          "video_url": { "stringValue": "https://storage.googleapis.com/genasl-video-files/I.mp4" }
-        },
-        "name": "projects/genasl/databases/(default)/documents/asl_mappings2/I",
-        "updateTime": "2025-03-25T19:51:19.599373Z"
-      },
+      "textPayload": { /* ... Firestore document for "I" ... */ },
       "timestamp": "2025-03-29T18:00:48.196208948Z"
     }
-    // Example: Looking up video URL for Gloss "WANT" (similar format)
-    // ...
-    // Example: Looking up video URL for Gloss "BUY" (similar format)
-    // ...
-    // Example: Looking up video URL for Gloss "COFFEE" (similar format)
-    // ...
+    // ... Lookups for WANT, BUY, COFFEE follow ...
     ```
 
 7.  **Cache Storage**: Stores the result in Firestore cache. **Input:** `input_text`, `gloss_text`, `video_mappings`. **Output:** Cache document created/updated (`save_result`). (YAML: `saveSentenceCache`)
     ```yaml
     # workflow.yaml snippet (Cache Storage)
     - saveSentenceCache:
-        try:
-          call: googleapis.firestore.v1.projects.databases.documents.createDocument # Or patch if exists
-          args:
-            parent: ${"projects/" + project_id + "/databases/(default)/documents"}
-            collectionId: "sentence_cache"
-            documentId: ${input_text} # Uses original input as ID
-            body:
-              fields:
-                gloss_text:
-                  stringValue: ${gloss_text}
-                video_mappings:
-                  arrayValue:
-                    values: ${video_mappings} # The list built in the loop
-                timestamp:
-                  timestampValue: ${time.format(sys.now())}
-          result: save_result
-        # ... error handling ...
+        call: googleapis.firestore.v1.projects.databases.documents.createDocument
+        args:
+          documentId: ${input_text} # Input
+          body:
+            fields:
+              gloss_text:
+                stringValue: ${gloss_text} # Input
+              video_mappings:
+                arrayValue:
+                  values: ${video_mappings} # Input
+              # ...
+        result: save_result # Output
     ```
 
 8.  **Return Result (Cache Miss)**: Formats and returns the final result. **Input:** `input_text`, `gloss_text`, `video_mappings`. **Output:** Final `result` object (containing original_input, gloss, videos). (YAML: `prepareResult`, `returnResult`)
@@ -421,52 +335,22 @@ When the system processes a sentence for the first time or cannot find a corresp
     # workflow.yaml snippet (Prepare & Return Result)
     - prepareResult:
         steps:
-          # ... loop to simplify video_mappings into simplified_videos ...
+          # ... loop to simplify video_mappings ...
           - createResult:
               assign:
-                - result:
-                    original_input: ${input_text}
-                    gloss: ${gloss_text}
-                    videos: ${simplified_videos}
-              next: logSuccess
+                - result: # Output
+                    original_input: ${input_text} # Input
+                    gloss: ${gloss_text} # Input
+                    videos: ${simplified_videos} # Input (from loop)
     - returnResult:
-        return: ${result}
+        return: ${result} # Output
     ```
     ```json
     // Example: Final result for Chinese input (Cache Miss, result parsed)
     {
       "jsonPayload": {
         "success": {
-          "result": {
-            "gloss": "I WANT BUY COFFEE",
-            "original_input": "我想買咖啡",
-            "videos": [
-              [
-                {
-                  "gloss": "I",
-                  "video_url": "https://storage.googleapis.com/genasl-video-files/I.mp4"
-                }
-              ],
-              [
-                {
-                  "gloss": "WANT",
-                  "video_url": "https://storage.googleapis.com/genasl-video-files/WANT.mp4"
-                }
-              ],
-              [
-                {
-                  "gloss": "BUY",
-                  "video_url": "https://storage.googleapis.com/genasl-video-files/BUY.mp4"
-                }
-              ],
-              [
-                {
-                  "gloss": "COFFEE",
-                  "video_url": "https://storage.googleapis.com/genasl-video-files/COFFEE.mp4"
-                }
-              ]
-            ]
-          }
+          "result": { /* ... final result object ... */ }
         },
         "state": "SUCCEEDED"
       },
@@ -483,17 +367,7 @@ When the system finds a matching record for the input text in the cache, the wor
     # workflow.yaml snippet (Input Handling)
     main:
       params: [args]
-      steps:
-        - init:
-            assign:
-              # ... initialization ...
-        - validateInput:
-            switch:
-              - condition: ${"text" in args}
-                assign:
-                  - input_text: ${args.text}
-                next: logInput # Or next processing step
-              # ... error handling ...
+      # ...
     ```
     ```json
     // Example: English Input
@@ -516,61 +390,28 @@ When the system finds a matching record for the input text in the cache, the wor
         try:
           call: googleapis.firestore.v1.projects.databases.documents.get
           args:
-            name: ${"projects/" + project_id + "/databases/(default)/documents/sentence_cache/" + input_text}
-          result: cache_result
+            name: ${... + input_text} # Input
+          result: cache_result # Output (document found)
         # ... except block is skipped ...
         next: processCacheResult
     # workflow.yaml snippet (Confirm Cache Hit)
     - processCacheResult:
         steps:
-          # ... logCacheResult ...
           - checkCache:
-              try:
-                assign:
-                  - has_cache: ${cache_result != null and ...} # Evaluates to true
-                  - cache_log: '${"Cache check result: " + input_text}'
-              # ... except block ...
-          - logCacheStatus:
-              call: sys.log
-              args:
-                text: '${cache_log}'
-          # ... decidePath switch follows ...
+              assign:
+                - has_cache: ${cache_result != null and ...} # Output: true
+          # ...
     ```
     ```json
     // Example: Cache Hit for English Input (Showing partial mapping)
     {
-      "textPayload": {
-        "fields": {
-          "gloss_text": { "stringValue": "I WANT BUY COFFEE" },
-          "video_mappings": {
-            "arrayValue": {
-              "values": [
-                {
-                  "mapValue": {
-                    "fields": {
-                      "gloss": { "stringValue": "I" },
-                      "video_url": { "stringValue": "https://storage.googleapis.com/genasl-video-files/I.mp4" }
-                    }
-                  }
-                },
-                {
-                  "mapValue": {
-                    "fields": {
-                      "gloss": { "stringValue": "WANT" },
-                      "video_url": { "stringValue": "https://storage.googleapis.com/genasl-video-files/WANT.mp4" }
-                    }
-                  }
-                }
-                // ... subsequent mappings omitted ...
-              ]
-            }
-          }
-          // ... other fields omitted ...
-        },
-        "name": "projects/genasl/databases/(default)/documents/sentence_cache/I want buy coffee"
-        // ... metadata like createTime, updateTime might be present ...
-      },
+      "textPayload": { /* ... Firestore document ... */ },
       "timestamp": "2025-03-29T17:49:35.189564765Z"
+    }
+    // Confirming Cache Hit (Plain text)
+    {
+      "textPayload": "Cache check result: I want buy coffee",
+      "timestamp": "2025-03-29T17:49:35.428965133Z"
     }
     ```
 
@@ -579,21 +420,19 @@ When the system finds a matching record for the input text in the cache, the wor
     # workflow.yaml snippet (Cache Hit Logic)
     - processCacheResult:
         steps:
-          # ... logCacheResult, checkCache, logCacheStatus ...
+          # ...
           - decidePath:
               switch:
-                - condition: ${has_cache} # Evaluates to true
+                - condition: ${has_cache} # Input: true
                   steps:
                     - useCache:
                         steps:
-                          - assignBasics:
+                          - assignBasics: # Assigns cached data
                               assign:
-                                - gloss_text: ${cache_result.fields.gloss_text.stringValue}
-                                - video_mappings: ${cache_result.fields.video_mappings.arrayValue.values}
-                                - english_text: ${input_text}
-                        next: prepareResult # Jump to result preparation
-                - condition: ${true}
-                  next: callDetectLanguage # Skipped
+                                - gloss_text: ${cache_result.fields.gloss_text.stringValue} # Output
+                                - video_mappings: ${cache_result.fields.video_mappings.arrayValue.values} # Output
+                        next: prepareResult # Jump
+                # ...
     ```
 
 4.  **Return Result (Cache Hit)**: Formats and returns the final result using cached data. **Input:** `input_text`, cached `gloss_text`, cached `video_mappings`. **Output:** Final `result` object. (YAML: `prepareResult`, `returnResult`)
@@ -604,49 +443,19 @@ When the system finds a matching record for the input text in the cache, the wor
           # ... loop to simplify video_mappings ...
           - createResult:
               assign:
-                - result:
-                    original_input: ${input_text} # Uses the input text
-                    gloss: ${gloss_text} # Uses cached gloss
-                    videos: ${simplified_videos} # Uses cached mappings
-              next: logSuccess
+                - result: # Output
+                    original_input: ${input_text} # Input
+                    gloss: ${gloss_text} # Input (from cache)
+                    videos: ${simplified_videos} # Input (from cache)
     - returnResult:
-        return: ${result}
+        return: ${result} # Output
     ```
     ```json
-    // Example: Generic Final Success Result (result parsed)
+    // Example: Final Success Result (result parsed)
     {
       "jsonPayload": {
         "success": {
-          "result": {
-            "gloss": "I WANT BUY COFFEE",
-            "original_input": "I want buy coffee",
-            "videos": [
-              [
-                {
-                  "gloss": "I",
-                  "video_url": "https://storage.googleapis.com/genasl-video-files/I.mp4"
-                }
-              ],
-              [
-                {
-                  "gloss": "WANT",
-                  "video_url": "https://storage.googleapis.com/genasl-video-files/WANT.mp4"
-                }
-              ],
-              [
-                {
-                  "gloss": "BUY",
-                  "video_url": "https://storage.googleapis.com/genasl-video-files/BUY.mp4"
-                }
-              ],
-              [
-                {
-                  "gloss": "COFFEE",
-                  "video_url": "https://storage.googleapis.com/genasl-video-files/COFFEE.mp4"
-                }
-              ]
-            ]
-          }
+          "result": { /* ... final result object ... */ }
         },
         "state": "SUCCEEDED"
       },
