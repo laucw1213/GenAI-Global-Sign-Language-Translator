@@ -1,9 +1,4 @@
 # Breaking Barriers: GenAI-powered Global Sign Language Translator on Google Cloud Platform
-
-*by John Doe on March 26, 2025*
-
-**Tags**: `Generative AI`, `Accessibility`, `Machine Learning`, `Cloud Architecture`, `Google Cloud Platform`, `Gemini AI`
-
 ---
 
 ## Introduction
@@ -13,6 +8,9 @@ In today's digital age, effective communication is essential for fostering inclu
 Our innovative solution leverages the power of Gemini 2.0 Flash AI to convert multilingual text and speech into expressive American Sign Language videos within seconds. By bridging the gap between spoken and written language and sign language, we're not just creating a technological solution—we're fostering a more inclusive world where communication barriers no longer create gaps between people.
 
 Sign language is not merely a communication tool but an essential part of deaf culture and identity. Through modern technology, we aim to provide a convenient tool for the general public to communicate easily with the deaf community, promoting social inclusion and enhancing understanding of deaf culture.
+
+**Try it now:** [ASL Translator](https://genasl.web.app/)
+**demo video:**
 
 ## Solution Overview
 
@@ -129,16 +127,6 @@ Examples:
 Return ONLY gloss words in a single line without any punctuation, extra spaces or newlines. Use ONLY words from our ASL dataset.
 ```
 
-### Video Generation Process
-
-Once the ASL gloss notation is generated, our video mapping algorithm:
-
-1. **Symbol Analysis**: Parses the sign language symbol sequence, identifies compound expressions, and determines temporal relationships.
-
-2. **Video Matching**: Matches each symbol with standard sign videos from our database, combining them for complex expressions and optimizing transitions for a natural flow.
-
-3. **Performance Optimization**: Implements local caching of frequent segments, context-based preloading, and streaming optimization to ensure smooth playback.
-
 ### ASL Translation Workflow
 
 Our core processing pipeline executes the translation process through a series of precisely defined steps. The following breakdown illustrates the flow based on different caching scenarios, referencing steps in the `backend/asl-workflow/workflow.yaml` file.
@@ -147,9 +135,16 @@ Our core processing pipeline executes the translation process through a series o
 
 When the system processes a sentence for the first time or cannot find a corresponding record in the cache, it executes the following full workflow. We use the Chinese input "我想買咖啡" as an example; this flow also applies to English input (which would simply skip the translation step).
 
-1.  **Receive Input**: Receives user text input. **Input:** `args` (e.g., `{"text": "我想買咖啡"}`). **Output:** `input_text` ("我想買咖啡"). (YAML: `main`, `validateInput`)
+1.  **Receive Input**: Validates and extracts the user's text input.
+
+    **Input JSON:**
+    ```json
+    {
+      "text": "我想買咖啡"
+    }
+    ```
+    **YAML:**
     ```yaml
-    # workflow.yaml snippet (Input Handling)
     main:
       params: [args]
       steps:
@@ -164,8 +159,8 @@ When the system processes a sentence for the first time or cannot find a corresp
                 next: logInput # Or next processing step
               # ... error handling ...
     ```
+    **Output JSON:**
     ```json
-    // Example: Chinese Input Log
     {
       "jsonPayload": {
         "start": {
@@ -178,9 +173,11 @@ When the system processes a sentence for the first time or cannot find a corresp
     }
     ```
 
-2.  **Cache Check (Miss)**: Looks up `input_text` in Firestore cache. **Input:** `input_text` ("我想買咖啡"). **Output:** Cache not found (404 Error, `cache_result` is null). (YAML: `checkSentenceCache`)
+2.  **Cache Check (Miss)**: Checks the Firestore cache for the input text.
+
+    **Input JSON:** Input JSON refers to the Step 1 output JSON.
+    **YAML:**
     ```yaml
-    # workflow.yaml snippet (Cache Check - Miss Path)
     - checkSentenceCache:
         try:
           call: googleapis.firestore.v1.projects.databases.documents.get
@@ -197,8 +194,8 @@ When the system processes a sentence for the first time or cannot find a corresp
             - continueToLangDetect: # Proceed to next step
                 next: callDetectLanguage
     ```
+    **Output JSON:**
     ```json
-    // Example: Cache Miss for Chinese Input (Error message parsed)
     {
       "textPayload": {
         "message_prefix": "Cache check error: ",
@@ -216,9 +213,11 @@ When the system processes a sentence for the first time or cannot find a corresp
     }
     ```
 
-3.  **Language Detection**: Detects language of `input_text`. **Input:** `input_text` ("我想買咖啡"). **Output:** `detection_result` (e.g., languageCode "zh-TW"). (YAML: `callDetectLanguage`)
+3.  **Language Detection**: Detects the language of the input text.
+
+    **Input JSON:** Input JSON refers to the Step 1 output JSON.
+    **YAML:**
     ```yaml
-    # workflow.yaml snippet (Language Detection)
     - callDetectLanguage:
         call: googleapis.translate.v3.projects.locations.detectLanguage
         args:
@@ -228,17 +227,19 @@ When the system processes a sentence for the first time or cannot find a corresp
             mimeType: "text/plain"
         result: detection_result
     ```
+    **Output JSON:**
     ```json
-    // Example: Detected Traditional Chinese
     {
       "textPayload": "zh-TW",
       "timestamp": "2025-03-29T18:00:46.362543476Z"
     }
     ```
 
-4.  **Intermediate Translation (Conditional)**: Translates non-English `input_text` to English. **Input:** `input_text`, `detection_result`. **Output:** `english_text` ("I want to buy coffee"). (YAML: `translateIfNeeded`, `callTranslateText`, `setEnglishText`)
+4.  **Intermediate Translation (Conditional)**: Translates the input text to English if it's not English.
+
+    **Input JSON:** Input JSON refers to the Step 1 and Step 3 output JSON.
+    **YAML:**
     ```yaml
-    # workflow.yaml snippet (Conditional Translation)
     - translateIfNeeded:
         switch:
           - condition: ${detection_result.languages[0].languageCode == "en"}
@@ -261,17 +262,19 @@ When the system processes a sentence for the first time or cannot find a corresp
         assign:
           - english_text: ${translation_result.translations[0].translatedText}
     ```
+    **Output JSON:**
     ```json
-    // Example: Chinese input translated to English
     {
       "textPayload": "I want to buy coffee", // "我想買咖啡" -> "I want to buy coffee"
       "timestamp": "2025-03-29T18:00:46.904554817Z"
     }
     ```
 
-5.  **ASL Gloss Conversion**: Converts `english_text` to ASL Gloss using Gemini. **Input:** `english_text` ("I want to buy coffee"). **Output:** `gloss_text` ("I WANT BUY COFFEE"). (YAML: `prepareGeminiRequest`, `callGenerateGloss`, `processGlossResult`)
+5.  **ASL Gloss Conversion**: Converts the English text into ASL Gloss notation using Gemini.
+
+    **Input JSON:** Input JSON refers to the Step 4 output JSON.
+    **YAML:**
     ```yaml
-    # workflow.yaml snippet (Gemini Call & Processing)
     - prepareGeminiRequest:
         assign:
           # ... promptString assignment ...
@@ -298,8 +301,8 @@ When the system processes a sentence for the first time or cannot find a corresp
             next: logProcessedGloss
           # ... error handling ...
     ```
+    **Output JSON:**
     ```json
-    // Example: Gemini API Response (from Chinese input workflow)
     {
       "textPayload": {
         "body": {
@@ -334,9 +337,11 @@ When the system processes a sentence for the first time or cannot find a corresp
     // The system then extracts the Gloss: "I WANT BUY COFFEE"
     ```
 
-6.  **Video URL Mapping**: Maps each word in `gloss_text` to a video URL from Firestore. **Input:** `gloss_text` ("I WANT BUY COFFEE"). **Output:** `video_mappings` (list of {gloss, video_url} objects). (YAML: `splitGlossText`, `processMapping` loop with `queryVideo`)
+6.  **Video URL Mapping**: Finds corresponding video URLs for each word in the ASL Gloss from Firestore.
+
+    **Input JSON:** Input JSON refers to the Step 5 output JSON.
+    **YAML:**
     ```yaml
-    # workflow.yaml snippet (Video Mapping Loop - Query & Add)
     - splitGlossText:
         assign:
           - characters: ${text.split(gloss_text, " ")}
@@ -371,8 +376,8 @@ When the system processes a sentence for the first time or cannot find a corresp
           - condition: ${true}
             next: saveSentenceCache # Exit loop
     ```
+    **Output JSON:** (Shows example for one word lookup, repeats for others)
     ```json
-    // Example: Looking up video URL for Gloss "I"
     {
       "textPayload": {
         "createTime": "2025-03-25T19:51:19.599373Z",
@@ -393,9 +398,11 @@ When the system processes a sentence for the first time or cannot find a corresp
     // ...
     ```
 
-7.  **Cache Storage**: Stores the result in Firestore cache. **Input:** `input_text`, `gloss_text`, `video_mappings`. **Output:** Cache document created/updated (`save_result`). (YAML: `saveSentenceCache`)
+7.  **Cache Storage**: Stores the generated Gloss and video mappings in the Firestore cache.
+
+    **Input JSON:** Input JSON refers to the Step 1, Step 5, and Step 6 output JSON.
+    **YAML:**
     ```yaml
-    # workflow.yaml snippet (Cache Storage)
     - saveSentenceCache:
         try:
           call: googleapis.firestore.v1.projects.databases.documents.createDocument # Or patch if exists
@@ -415,10 +422,37 @@ When the system processes a sentence for the first time or cannot find a corresp
           result: save_result
         # ... error handling ...
     ```
+    **Output JSON:**
+    ```json
+    {
+        "gloss_text": "I WANT BUY COFFEE",
+        "timestamp": "2025-02-14T04:49:17.311Z", // Example timestamp
+        "video_mappings": [
+            {
+                "gloss": "I",
+                "video_url": "https://storage.googleapis.com/genasl-video-files/I.mp4"
+            },
+            {
+                "gloss": "WANT",
+                "video_url": "https://storage.googleapis.com/genasl-video-files/WANT.mp4"
+            },
+            {
+                "gloss": "BUY",
+                "video_url": "https://storage.googleapis.com/genasl-video-files/BUY.mp4"
+            },
+            {
+                "gloss": "COFFEE",
+                "video_url": "https://storage.googleapis.com/genasl-video-files/COFFEE.mp4"
+            }
+        ]
+    }
+    ```
 
-8.  **Return Result (Cache Miss)**: Formats and returns the final result. **Input:** `input_text`, `gloss_text`, `video_mappings`. **Output:** Final `result` object (containing original_input, gloss, videos). (YAML: `prepareResult`, `returnResult`)
+8.  **Return Result (Cache Miss)**: Formats and returns the translation result (Gloss and video URLs).
+
+    **Input JSON:** Input JSON refers to the Step 1, Step 5, and Step 6 output JSON.
+    **YAML:**
     ```yaml
-    # workflow.yaml snippet (Prepare & Return Result)
     - prepareResult:
         steps:
           # ... loop to simplify video_mappings into simplified_videos ...
@@ -432,8 +466,8 @@ When the system processes a sentence for the first time or cannot find a corresp
     - returnResult:
         return: ${result}
     ```
+    **Output JSON:**
     ```json
-    // Example: Final result for Chinese input (Cache Miss, result parsed)
     {
       "jsonPayload": {
         "success": {
@@ -478,9 +512,16 @@ When the system processes a sentence for the first time or cannot find a corresp
 
 When the system finds a matching record for the input text in the cache, the workflow is significantly simplified. We use the English input "I want buy coffee" as an example:
 
-1.  **Receive Input**: Receives user text input. **Input:** `args` (e.g., `{"text": "I want buy coffee"}`). **Output:** `input_text` ("I want buy coffee"). (YAML: `main`, `validateInput`)
+1.  **Receive Input**: Validates and extracts the user's text input.
+
+    **Input JSON:**
+    ```json
+    {
+      "text": "I want buy coffee"
+    }
+    ```
+    **YAML:**
     ```yaml
-    # workflow.yaml snippet (Input Handling)
     main:
       params: [args]
       steps:
@@ -495,8 +536,8 @@ When the system finds a matching record for the input text in the cache, the wor
                 next: logInput # Or next processing step
               # ... error handling ...
     ```
+    **Output JSON:**
     ```json
-    // Example: English Input
     {
       "jsonPayload": {
         "start": {
@@ -509,9 +550,11 @@ When the system finds a matching record for the input text in the cache, the wor
     }
     ```
 
-2.  **Cache Check (Hit)**: Looks up `input_text` in Firestore cache and finds a record. **Input:** `input_text` ("I want buy coffee"). **Output:** `cache_result` (Firestore document), `has_cache` (true). (YAML: `checkSentenceCache`, `processCacheResult` -> `checkCache`)
+2.  **Cache Check (Hit)**: Finds a matching record for the input text in the Firestore cache.
+
+    **Input JSON:** Input JSON refers to the Step 1 output JSON.
+    **YAML:**
     ```yaml
-    # workflow.yaml snippet (Cache Check - Success Path)
     - checkSentenceCache:
         try:
           call: googleapis.firestore.v1.projects.databases.documents.get
@@ -536,8 +579,8 @@ When the system finds a matching record for the input text in the cache, the wor
                 text: '${cache_log}'
           # ... decidePath switch follows ...
     ```
+    **Output JSON:** (Shows the retrieved cache document)
     ```json
-    // Example: Cache Hit for English Input (Showing partial mapping)
     {
       "textPayload": {
         "fields": {
@@ -574,9 +617,11 @@ When the system finds a matching record for the input text in the cache, the wor
     }
     ```
 
-3.  **Skip Processing Steps**: Workflow skips intermediate steps due to cache hit. **Input:** `has_cache` (true). **Output:** Control flow jumps to result preparation. (YAML: `processCacheResult` -> `decidePath` -> `useCache`)
+3.  **Skip Processing Steps**: Bypasses translation and Gloss generation steps due to the cache hit.
+
+    **Input JSON:** Input JSON refers to the Step 2 output JSON.
+    **YAML:**
     ```yaml
-    # workflow.yaml snippet (Cache Hit Logic)
     - processCacheResult:
         steps:
           # ... logCacheResult, checkCache, logCacheStatus ...
@@ -591,14 +636,15 @@ When the system finds a matching record for the input text in the cache, the wor
                                 - gloss_text: ${cache_result.fields.gloss_text.stringValue}
                                 - video_mappings: ${cache_result.fields.video_mappings.arrayValue.values}
                                 - english_text: ${input_text}
-                        next: prepareResult # Jump to result preparation
-                - condition: ${true}
-                  next: callDetectLanguage # Skipped
+                        next: prepareResult
     ```
+    *(No specific Output JSON shown for this control flow step)*
 
-4.  **Return Result (Cache Hit)**: Formats and returns the final result using cached data. **Input:** `input_text`, cached `gloss_text`, cached `video_mappings`. **Output:** Final `result` object. (YAML: `prepareResult`, `returnResult`)
+4.  **Return Result (Cache Hit)**: Formats and returns the cached translation result.
+
+    **Input JSON:** Input JSON refers to the Step 1 and Step 2 output JSON.
+    **YAML:**
     ```yaml
-    # workflow.yaml snippet (Prepare & Return Result)
     - prepareResult:
         steps:
           # ... loop to simplify video_mappings ...
@@ -612,8 +658,8 @@ When the system finds a matching record for the input text in the cache, the wor
     - returnResult:
         return: ${result}
     ```
+    **Output JSON:**
     ```json
-    // Example: Generic Final Success Result (result parsed)
     {
       "jsonPayload": {
         "success": {
