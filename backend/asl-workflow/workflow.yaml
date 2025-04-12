@@ -156,7 +156,7 @@ main:
               - "I want to visit New York next year" → "NEXT_YEAR I WANT VISIT NEW_YORK"
 
               Return ONLY gloss words in a single line without any punctuation, extra spaces or newlines. Use ONLY words from our ASL dataset.
-          - combinedText: ${promptString + " " + english_text}
+          - combinedText: ${promptString + "The above is the Rules and below is the INPUT TEXT:" + english_text}
         next: callGenerateGloss
 
     # 调用 Gemini 2.0 Flash 模型，使用 OAuth2 进行认证
