@@ -1,0 +1,344 @@
+{
+  "1": {
+    "inputs": {
+      "ckpt_name": "cardosAnime_v20 (1).safetensors",
+      "beta_schedule": "sqrt_linear (AnimateDiff)",
+      "use_custom_scale_factor": false,
+      "scale_factor": 0.18215
+    },
+    "class_type": "CheckpointLoaderSimpleWithNoiseSelect",
+    "_meta": {
+      "title": "Load Checkpoint w/ Noise Select 🎭🅐🅓"
+    }
+  },
+  "2": {
+    "inputs": {
+      "vae_name": "kl-f8-anime2.ckpt"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load VAE"
+    }
+  },
+  "3": {
+    "inputs": {
+      "text": "a girl wearing loose black Short-sleeved clothes ,long black hair, solid blue background,closed mouth, high quality, detailed clothing folds, soft fabric texture, clear face, elegant pose, clean background, simple background, perfect exposure, professional photography, solid color wall",
+      "clip": [
+        "4",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Prompt)"
+    }
+  },
+  "4": {
+    "inputs": {
+      "stop_at_clip_layer": -2,
+      "clip": [
+        "1",
+        1
+      ]
+    },
+    "class_type": "CLIPSetLastLayer",
+    "_meta": {
+      "title": "CLIP Set Last Layer"
+    }
+  },
+  "6": {
+    "inputs": {
+      "text": "open mouth, changing background, textured background, pattern background, blurry, low quality, tight clothes, messy background, pixelated, unattractive, bad lighting, wrong color, distorted hands, unfocused, extra limbs, extra fingers, bad proportions, poorly drawn face, chaotic background, out of frame, low-resolution, poor composition, awkward pose, multiple backgrounds, ugly, muted colors, NSFW",
+      "clip": [
+        "4",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Prompt)"
+    }
+  },
+  "7": {
+    "inputs": {
+      "seed": 785916362724470,
+      "steps": 16,
+      "cfg": 7.5,
+      "sampler_name": "dpmpp_2m_sde_gpu",
+      "scheduler": "karras",
+      "denoise": 1,
+      "model": [
+        "86",
+        0
+      ],
+      "positive": [
+        "70",
+        0
+      ],
+      "negative": [
+        "70",
+        1
+      ],
+      "latent_image": [
+        "9",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "9": {
+    "inputs": {
+      "width": 512,
+      "height": 768,
+      "batch_size": [
+        "91",
+        1
+      ]
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Empty Latent Image"
+    }
+  },
+  "10": {
+    "inputs": {
+      "samples": [
+        "7",
+        0
+      ],
+      "vae": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "65": {
+    "inputs": {
+      "images": [
+        "91",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "Preview Image"
+    }
+  },
+  "66": {
+    "inputs": {
+      "control_net_name": "control_depth-fp16.safetensors"
+    },
+    "class_type": "ControlNetLoaderAdvanced",
+    "_meta": {
+      "title": "Load Advanced ControlNet Model 🛂🅐🅒🅝"
+    }
+  },
+  "67": {
+    "inputs": {
+      "strength": 0.85,
+      "start_percent": 0,
+      "end_percent": 0.9,
+      "positive": [
+        "3",
+        0
+      ],
+      "negative": [
+        "6",
+        0
+      ],
+      "control_net": [
+        "66",
+        0
+      ],
+      "image": [
+        "72",
+        0
+      ]
+    },
+    "class_type": "ControlNetApplyAdvanced",
+    "_meta": {
+      "title": "Apply ControlNet"
+    }
+  },
+  "68": {
+    "inputs": {
+      "images": [
+        "72",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "Preview Image"
+    }
+  },
+  "69": {
+    "inputs": {
+      "control_net_name": "control_v11p_sd15_openpose_fp16.safetensors"
+    },
+    "class_type": "ControlNetLoaderAdvanced",
+    "_meta": {
+      "title": "Load Advanced ControlNet Model 🛂🅐🅒🅝"
+    }
+  },
+  "70": {
+    "inputs": {
+      "strength": 0.75,
+      "start_percent": 0,
+      "end_percent": 1,
+      "positive": [
+        "67",
+        0
+      ],
+      "negative": [
+        "67",
+        1
+      ],
+      "control_net": [
+        "69",
+        0
+      ],
+      "image": [
+        "71",
+        0
+      ]
+    },
+    "class_type": "ControlNetApplyAdvanced",
+    "_meta": {
+      "title": "Apply ControlNet"
+    }
+  },
+  "71": {
+    "inputs": {
+      "detect_hand": "enable",
+      "detect_body": "enable",
+      "detect_face": "disable",
+      "resolution": 320,
+      "bbox_detector": "yolox_l.onnx",
+      "pose_estimator": "dw-ll_ucoco_384_bs5.torchscript.pt",
+      "scale_stick_for_xinsr_cn": "disable",
+      "image": [
+        "91",
+        0
+      ]
+    },
+    "class_type": "DWPreprocessor",
+    "_meta": {
+      "title": "DWPose Estimator"
+    }
+  },
+  "72": {
+    "inputs": {
+      "a": 6.28,
+      "bg_threshold": 0.15,
+      "resolution": 384,
+      "image": [
+        "91",
+        0
+      ]
+    },
+    "class_type": "MiDaS-DepthMapPreprocessor",
+    "_meta": {
+      "title": "MiDaS Depth Map"
+    }
+  },
+  "86": {
+    "inputs": {
+      "model_name": "temporaldiff-v1-animatediff.ckpt",
+      "beta_schedule": "sqrt_linear (AnimateDiff)",
+      "motion_scale": 1,
+      "apply_v2_models_properly": true,
+      "model": [
+        "1",
+        0
+      ],
+      "context_options": [
+        "92",
+        0
+      ]
+    },
+    "class_type": "ADE_AnimateDiffLoaderWithContext",
+    "_meta": {
+      "title": "AnimateDiff Loader [Legacy] 🎭🅐🅓①"
+    }
+  },
+  "87": {
+    "inputs": {
+      "frame_rate": 16,
+      "loop_count": 0,
+      "filename_prefix": "AnimateDiff",
+      "format": "video/h264-mp4",
+      "pix_fmt": "yuv420p",
+      "crf": 19,
+      "save_metadata": true,
+      "pingpong": false,
+      "save_output": true,
+      "images": [
+        "10",
+        0
+      ]
+    },
+    "class_type": "VHS_VideoCombine",
+    "_meta": {
+      "title": "Video Combine 🎥🅥🅗🅢"
+    }
+  },
+  "89": {
+    "inputs": {
+      "frame_rate": 16,
+      "loop_count": 0,
+      "filename_prefix": "dwpose",
+      "format": "video/h264-mp4",
+      "pix_fmt": "yuv420p",
+      "crf": 19,
+      "save_metadata": true,
+      "pingpong": false,
+      "save_output": true,
+      "images": [
+        "71",
+        0
+      ]
+    },
+    "class_type": "VHS_VideoCombine",
+    "_meta": {
+      "title": "Video Combine 🎥🅥🅗🅢"
+    }
+  },
+  "91": {
+    "inputs": {
+      "video": "D:\\project\\GenASL\\before\\Brady-session-ASL_2011_07_22_Brady-scene-7-535-587-camera1.mov",
+      "force_rate": 16,
+      "force_size": "Disabled",
+      "custom_width": 512,
+      "custom_height": 768,
+      "frame_load_cap": 0,
+      "skip_first_frames": 0,
+      "select_every_nth": 2
+    },
+    "class_type": "VHS_LoadVideoPath",
+    "_meta": {
+      "title": "Load Video (Path) 🎥🅥🅗🅢"
+    }
+  },
+  "92": {
+    "inputs": {
+      "context_length": 12,
+      "context_overlap": 4,
+      "fuse_method": "pyramid",
+      "use_on_equal_length": false,
+      "start_percent": 0,
+      "guarantee_steps": 3
+    },
+    "class_type": "ADE_StandardStaticContextOptions",
+    "_meta": {
+      "title": "Context Options◆Standard Static 🎭🅐🅓"
+    }
+  }
+}
