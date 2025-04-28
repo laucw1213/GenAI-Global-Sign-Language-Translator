@@ -66,6 +66,7 @@ This architecture enables seamless translation from text or speech to sign langu
 
 **9. ComfyUI:**  
 - ComfyUI is a node-based visual interface used in this project to handle the entire ASL video-generation workflow.  
+![ComfyUI Workflow](./image/workflow.png)
 - **Core Workflow Nodes:**  
   - **Video Loading & Preprocessing**  
     - `VHS_LoadVideoPath`: Imports the source video and adjusts frame rate/resolution  
