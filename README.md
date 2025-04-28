@@ -64,6 +64,31 @@ Secure connection between the frontend and backend workflow, passing authenticat
 
 This architecture enables seamless translation from text or speech to sign language videos, with performance optimization through caching and cloud-based processing. The modular design allows for easy scaling and future enhancements.
 
+**9. ComfyUI:**  
+- ComfyUI is a node-based visual interface used in this project to handle the entire ASL video-generation workflow.  
+- **Core Workflow Nodes:**  
+  - **Video Loading & Preprocessing**  
+    - `VHS_LoadVideoPath`: Imports the source video and adjusts frame rate/resolution  
+    - `MiDaS-DepthMapPreprocessor`: Generates a depth map  
+    - `DWPreprocessor`: Performs hand and body pose estimation  
+  - **Model Loading & Sampling**  
+    - `CheckpointLoaderSimpleWithNoiseSelect` + `VAELoader`: Loads the animation model and VAE encoder  
+    - `ADE_AnimateDiffLoaderWithContext` + `StandardStaticContextOptions`: Loads the AnimateDiff Evolved model with context options  
+    - `KSampler`: Generates latent image sequences using the specified sampler and parameters  
+  - **ControlNet Control**  
+    - `ControlNetLoaderAdvanced` + `ControlNetApplyAdvanced`: Loads and applies depth and pose ControlNet, adjusting strength and active range  
+  - **Intermediate Preview**  
+    - `PreviewImage`: Visualizes intermediate depth maps or latent images  
+  - **Output Video Composition**  
+    - `VHS_VideoCombine`: Combines generated frames into the final ASL video file  
+- **Integrated Plugins:**  
+  - [ComfyUI-Advanced-ControlNet](https://github.com/Kosinkadink/ComfyUI-Advanced-ControlNet)  
+  - [ComfyUI-AnimateDiff-Evolved](https://github.com/Kosinkadink/ComfyUI-AnimateDiff-Evolved)  
+  - [comfyui_controlnet_aux](https://github.com/Fannovel16/comfyui_controlnet_aux)  
+  - [ComfyUI-VideoHelperSuite](https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite)  
+
+
+
 ## Technical Implementation
 
 ### Core Technologies
